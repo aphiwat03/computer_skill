@@ -47,6 +47,28 @@ export interface GameState {
   levelComplete: boolean;
   totalTime: number;
   shootingTimeLeft: number;
+    startedAt: string;
+}
+
+export interface GameResult {
+  gameId: string;
+  gameName: string;
+  playerId: string;
+  sessionId: string;
+  score: number;
+  accuracy: number;
+  reactionTimeMs?: number;
+  responseTimesMs: number[];
+  startedAt: string;
+  endedAt: string;
+  durationMs: number;
+  rawData: {
+    finalLevel: number;
+    levelComplete: boolean;
+    hitCount: number;
+    missCount: number;
+    shots: Shot[];
+  };
 }
 
 export const LEVELS: LevelConfig[] = [

@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import type { GameState, Target, Shot, LevelConfig } from "../types/game";
-import { LEVELS } from "../types/game";
+import type { GameState, Target, Shot, LevelConfig, GameResult } from "../aimtrainer/types";
+import { LEVELS } from "../aimtrainer/types";
 
 function generateTargets(count: number): Target[] {
   const targets: Target[] = [];
@@ -48,11 +48,12 @@ const initialState: GameState = {
   hitCount: 0,
   currentReactionStart: null,
   levelComplete: false,
+  startedAt: "",
   totalTime: 0,
   shootingTimeLeft: 0,
 };
 
-export function useGame() {
+export function useGame(playerId: string, sessionId: string, onGameComplete: (result: GameResult) => void) {
   const [state, setState] = useState<GameState>(initialState);
   const signalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const shootingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -106,6 +107,7 @@ export function useGame() {
       setState((prev) => ({
         ...prev,
         phase: "memorize",
+        startedAt: new Date().toISOString(), 
         currentLevel: level,
         targets,
         shots: [],
@@ -140,6 +142,7 @@ export function useGame() {
 
           shootingTimerRef.current = setTimeout(() => {
             clearAllTimers();
+            buildAndSendResult(stateRef.current);
             setState((prev) => ({
               ...prev,
               phase: "result",
@@ -224,6 +227,7 @@ export function useGame() {
         const allHit = updatedTargets.every((t) => t.isHit);
         if (allHit) {
           clearAllTimers();
+          buildAndSendResult(stateRef.current);  
         }
 
         return {
@@ -248,6 +252,7 @@ export function useGame() {
   const nextLevel = useCallback(() => {
     const nextLvl = stateRef.current.currentLevel + 1;
     if (nextLvl > LEVELS.length) {
+        buildAndSendResult(stateRef.current);    
       setState((prev) => ({ ...prev, phase: "gameover", levelComplete: true }));
     } else {
       startLevel(nextLvl);
@@ -258,6 +263,43 @@ export function useGame() {
     clearAllTimers();
     setState({ ...initialState });
   }, [clearAllTimers]);
+
+  const buildAndSendResult = useCallback((finalState: GameState) => {
+  const endedAt = new Date().toISOString();
+  const durationMs = Date.now() - new Date(finalState.startedAt).getTime();
+  const config = getLevelConfig(finalState.currentLevel);
+  const hits = finalState.shots.filter((s) => s.hit);
+
+  const result: GameResult = {
+    gameId:   "target-ghost",
+    gameName: "Target Ghost",
+    playerId,
+    sessionId,
+
+    score:           finalState.score,
+    accuracy:        config.targetCount > 0
+                       ? finalState.hitCount / config.targetCount
+                       : 0,
+    reactionTimeMs:  hits.length > 0
+                       ? Math.round(hits.reduce((a, s) => a + (s.reactionTime ?? 0), 0) / hits.length)
+                       : undefined,
+    responseTimesMs: hits.map((s) => s.reactionTime ?? 0),
+
+    startedAt:  finalState.startedAt,
+    endedAt,
+    durationMs,
+
+    rawData: {
+      finalLevel:    finalState.currentLevel,
+      levelComplete: finalState.levelComplete,
+      hitCount:      finalState.hitCount,
+      missCount:     finalState.missCount,
+      shots:         finalState.shots,
+    },
+  };
+
+  onGameComplete(result);
+}, [playerId, sessionId, getLevelConfig, onGameComplete]);
 
   const goToMenu = useCallback(() => {
     clearAllTimers();

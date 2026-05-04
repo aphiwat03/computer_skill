@@ -1,11 +1,5 @@
-import TargetGhostGame from "./games/aimtrainer/TargetGhostGame";
+import GameSelector from "./GameSelector";
 
 export default function App() {
-  return  <TargetGhostGame
-      playerId="dev-player"
-      sessionId="dev-session"
-      onGameComplete={(result) => {
-        console.log("Game complete:", result);
-      }}
-    />;
+  return <GameSelector />;
 }

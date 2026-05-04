@@ -1,5 +1,11 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import type { GameState, Target, Shot, LevelConfig, GameResult } from "../aimtrainer/types";
+import type {
+  GameState,
+  Target,
+  Shot,
+  LevelConfig,
+  GameResult,
+} from "../aimtrainer/types";
 import { LEVELS } from "../aimtrainer/types";
 
 function generateTargets(count: number): Target[] {
@@ -53,8 +59,16 @@ const initialState: GameState = {
   shootingTimeLeft: 0,
 };
 
-export function useGame(playerId: string, sessionId: string, onGameComplete: (result: GameResult) => void) {
+export function useGame(
+  playerId: string,
+  sessionId: string,
+  onGameComplete: (result: GameResult) => void,
+) {
   const [state, setState] = useState<GameState>(initialState);
+
+  // ❌ เอา pendingResult ออก เพราะเราจะไม่ส่งข้อมูลแบบ Auto แล้ว
+  const levelResultsRef = useRef<any[]>([]);
+  const initialStartTimeRef = useRef<string>(new Date().toISOString());
   const signalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const shootingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -82,7 +96,8 @@ export function useGame(playerId: string, sessionId: string, onGameComplete: (re
         if (prev.phase !== "shooting") return prev;
         const unhitTargets = prev.targets.filter((t) => !t.isHit);
         if (unhitTargets.length === 0) return prev;
-        const rand = unhitTargets[Math.floor(Math.random() * unhitTargets.length)];
+        const rand =
+          unhitTargets[Math.floor(Math.random() * unhitTargets.length)];
         const updatedTargets = prev.targets.map((t) => ({
           ...t,
           isActive: t.id === rand.id,
@@ -104,10 +119,15 @@ export function useGame(playerId: string, sessionId: string, onGameComplete: (re
       const config = getLevelConfig(level);
       const targets = generateTargets(config.targetCount);
 
+      const startedAtTime =
+        levelResultsRef.current.length === 0
+          ? initialStartTimeRef.current
+          : stateRef.current.startedAt;
+
       setState((prev) => ({
         ...prev,
         phase: "memorize",
-        startedAt: new Date().toISOString(), 
+        startedAt: startedAtTime,
         currentLevel: level,
         targets,
         shots: [],
@@ -142,7 +162,7 @@ export function useGame(playerId: string, sessionId: string, onGameComplete: (re
 
           shootingTimerRef.current = setTimeout(() => {
             clearAllTimers();
-            buildAndSendResult(stateRef.current);
+            // ✅ เอาการส่งข้อมูล Auto ออก ให้มันค้างหน้าโชว์คะแนนเอาไว้
             setState((prev) => ({
               ...prev,
               phase: "result",
@@ -154,7 +174,7 @@ export function useGame(playerId: string, sessionId: string, onGameComplete: (re
         }, config.blackoutTime);
       }, config.memorizeTime);
     },
-    [clearAllTimers, getLevelConfig, scheduleNextSignal]
+    [clearAllTimers, getLevelConfig, scheduleNextSignal],
   );
 
   const handleShoot = useCallback(
@@ -165,7 +185,7 @@ export function useGame(playerId: string, sessionId: string, onGameComplete: (re
         const now = Date.now();
 
         const activeTarget = prev.targets.find(
-          (t) => t.id === prev.activeTargetId && t.isActive
+          (t) => t.id === prev.activeTargetId && t.isActive,
         );
         let hit = false;
         let hitTargetId: number | null = null;
@@ -193,7 +213,7 @@ export function useGame(playerId: string, sessionId: string, onGameComplete: (re
 
         if (hit && hitTargetId !== null) {
           updatedTargets = prev.targets.map((t) =>
-            t.id === hitTargetId ? { ...t, isHit: true, isActive: false } : t
+            t.id === hitTargetId ? { ...t, isHit: true, isActive: false } : t,
           );
           newActiveId = null;
           newReactionStart = null;
@@ -225,10 +245,6 @@ export function useGame(playerId: string, sessionId: string, onGameComplete: (re
         }
 
         const allHit = updatedTargets.every((t) => t.isHit);
-        if (allHit) {
-          clearAllTimers();
-          buildAndSendResult(stateRef.current);  
-        }
 
         return {
           ...prev,
@@ -246,65 +262,105 @@ export function useGame(playerId: string, sessionId: string, onGameComplete: (re
         };
       });
     },
-    [getLevelConfig, scheduleNextSignal, clearAllTimers]
+    [getLevelConfig, scheduleNextSignal, clearAllTimers],
   );
 
   const nextLevel = useCallback(() => {
     const nextLvl = stateRef.current.currentLevel + 1;
     if (nextLvl > LEVELS.length) {
-        buildAndSendResult(stateRef.current);    
+      // ✅ ลบการส่งข้อมูล Auto ออก ให้เกมเข้าสู่หน้า gameover ก่อนให้ผู้เล่นกดออกเอง
       setState((prev) => ({ ...prev, phase: "gameover", levelComplete: true }));
     } else {
+      const currentLevelResult = {
+        level: stateRef.current.currentLevel,
+        shots: stateRef.current.shots,
+        score: stateRef.current.score,
+        hitCount: stateRef.current.hitCount,
+        missCount: stateRef.current.missCount,
+      };
+      levelResultsRef.current = [
+        ...levelResultsRef.current,
+        currentLevelResult,
+      ];
       startLevel(nextLvl);
     }
   }, [startLevel]);
 
   const restartGame = useCallback(() => {
     clearAllTimers();
+    levelResultsRef.current = [];
+    initialStartTimeRef.current = new Date().toISOString();
     setState({ ...initialState });
   }, [clearAllTimers]);
 
-  const buildAndSendResult = useCallback((finalState: GameState) => {
-  const endedAt = new Date().toISOString();
-  const durationMs = Date.now() - new Date(finalState.startedAt).getTime();
-  const config = getLevelConfig(finalState.currentLevel);
-  const hits = finalState.shots.filter((s) => s.hit);
+  // ✅ เปลี่ยนจาก buildAndSendResult เป็นแค่ buildResult สำหรับปั้น Object คืนค่า
+  const buildResult = useCallback(
+    (finalState: GameState): GameResult => {
+      const endedAt = new Date().toISOString();
+      const durationMs =
+        Date.now() - new Date(initialStartTimeRef.current).getTime();
 
-  const result: GameResult = {
-    gameId:   "target-ghost",
-    gameName: "Target Ghost",
-    playerId,
-    sessionId,
+      // รวมข้อมูลของด่านปัจจุบันที่ค้างอยู่ (ในกรณีที่กดออกก่อนจบด่านทั้งหมด)
+      const currentLevelResult = {
+        level: finalState.currentLevel,
+        shots: finalState.shots,
+        score: finalState.score,
+        hitCount: finalState.hitCount,
+        missCount: finalState.missCount,
+      };
+      const allResults = [...levelResultsRef.current, currentLevelResult];
 
-    score:           finalState.score,
-    accuracy:        config.targetCount > 0
-                       ? finalState.hitCount / config.targetCount
-                       : 0,
-    reactionTimeMs:  hits.length > 0
-                       ? Math.round(hits.reduce((a, s) => a + (s.reactionTime ?? 0), 0) / hits.length)
-                       : undefined,
-    responseTimesMs: hits.map((s) => s.reactionTime ?? 0),
+      const allShots = allResults.flatMap((r) => r.shots);
+      const totalHits = allResults.reduce((sum, r) => sum + r.hitCount, 0);
+      const totalMisses = allResults.reduce((sum, r) => sum + r.missCount, 0);
+      const totalScore = allResults.reduce((sum, r) => sum + r.score, 0);
+      const hits = allShots.filter((s) => s.hit);
 
-    startedAt:  finalState.startedAt,
-    endedAt,
-    durationMs,
-
-    rawData: {
-      finalLevel:    finalState.currentLevel,
-      levelComplete: finalState.levelComplete,
-      hitCount:      finalState.hitCount,
-      missCount:     finalState.missCount,
-      shots:         finalState.shots,
+      return {
+        gameId: "aimtrainer", // ✅ ตั้งชื่อให้ตรงกับหน้า GameSelector
+        gameName: "Target Ghost",
+        playerId,
+        sessionId,
+        score: totalScore,
+        accuracy:
+          allShots.length > 0 ? (hits.length / allShots.length) * 100 : 0,
+        reactionTimeMs:
+          hits.length > 0
+            ? Math.round(
+                hits.reduce((a, s) => a + (s.reactionTime ?? 0), 0) /
+                  hits.length,
+              )
+            : 0,
+        responseTimesMs: hits.map((s) => s.reactionTime ?? 0),
+        startedAt: initialStartTimeRef.current,
+        endedAt,
+        durationMs,
+        rawData: {
+          finalLevel: finalState.currentLevel,
+          levelComplete: finalState.levelComplete,
+          hitCount: totalHits,
+          missCount: totalMisses,
+          shots: allShots,
+          levelResults: allResults,
+        },
+      };
     },
-  };
-
-  onGameComplete(result);
-}, [playerId, sessionId, getLevelConfig, onGameComplete]);
+    [playerId, sessionId],
+  );
 
   const goToMenu = useCallback(() => {
     clearAllTimers();
     setState({ ...initialState });
+    levelResultsRef.current = [];
   }, [clearAllTimers]);
+
+  const submitAndExit = useCallback(() => {
+    clearAllTimers();
+    const finalResult = buildResult(stateRef.current);
+    onGameComplete(finalResult);
+    setState({ ...initialState });
+    levelResultsRef.current = [];
+  }, [clearAllTimers, buildResult, onGameComplete]);
 
   useEffect(() => {
     return () => clearAllTimers();
@@ -318,5 +374,6 @@ export function useGame(playerId: string, sessionId: string, onGameComplete: (re
     nextLevel,
     restartGame,
     goToMenu,
+    submitAndExit,
   };
 }

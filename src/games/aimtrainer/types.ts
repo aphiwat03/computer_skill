@@ -47,7 +47,7 @@ export interface GameState {
   levelComplete: boolean;
   totalTime: number;
   shootingTimeLeft: number;
-    startedAt: string;
+  startedAt: string;
 }
 
 export interface GameResult {
@@ -62,13 +62,7 @@ export interface GameResult {
   startedAt: string;
   endedAt: string;
   durationMs: number;
-  rawData: {
-    finalLevel: number;
-    levelComplete: boolean;
-    hitCount: number;
-    missCount: number;
-    shots: Shot[];
-  };
+  rawData: any;
 }
 
 export const LEVELS: LevelConfig[] = [
@@ -83,7 +77,7 @@ export const LEVELS: LevelConfig[] = [
   },
   {
     level: 2,
-    targetCount: 4,
+    targetCount: 5,
     memorizeTime: 4000,
     blackoutTime: 1200,
     shootingTime: 28000,
@@ -92,7 +86,7 @@ export const LEVELS: LevelConfig[] = [
   },
   {
     level: 3,
-    targetCount: 5,
+    targetCount: 7,
     memorizeTime: 3500,
     blackoutTime: 1500,
     shootingTime: 25000,
@@ -101,7 +95,7 @@ export const LEVELS: LevelConfig[] = [
   },
   {
     level: 4,
-    targetCount: 6,
+    targetCount: 9,
     memorizeTime: 3000,
     blackoutTime: 1800,
     shootingTime: 22000,
@@ -110,7 +104,7 @@ export const LEVELS: LevelConfig[] = [
   },
   {
     level: 5,
-    targetCount: 7,
+    targetCount: 11,
     memorizeTime: 2500,
     blackoutTime: 2000,
     shootingTime: 20000,

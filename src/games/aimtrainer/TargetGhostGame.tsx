@@ -1,4 +1,10 @@
-import { useRef, useCallback, useEffect, useState, type CSSProperties } from "react";
+import {
+  useRef,
+  useCallback,
+  useEffect,
+  useState,
+  type CSSProperties,
+} from "react";
 import { useGame } from "./logic";
 import { LEVELS } from "./types";
 import type { GameResult, GamePhase, LevelConfig } from "./types";
@@ -32,7 +38,6 @@ interface GameOverScreenProps {
   hitCount: number;
   missCount: number;
   currentLevel: number;
-  onRestart: () => void;
   onMenu: () => void;
   cleared: boolean;
 }
@@ -47,7 +52,6 @@ interface ResultScreenProps {
   score: number;
   isLastLevel: boolean;
   onNext: () => void;
-  onRestart: () => void;
   onMenu: () => void;
 }
 
@@ -209,9 +213,23 @@ function HUD({
       zIndex: 10,
     },
     hudLeft: { display: "flex", gap: 20, minWidth: 200 },
-    hudRight: { display: "flex", gap: 20, minWidth: 200, justifyContent: "flex-end" },
-    hudCenter: { flex: 1, display: "flex", justifyContent: "center", alignItems: "center" },
-    hudBlock: { display: "flex", flexDirection: "column", alignItems: "center" },
+    hudRight: {
+      display: "flex",
+      gap: 20,
+      minWidth: 200,
+      justifyContent: "flex-end",
+    },
+    hudCenter: {
+      flex: 1,
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    hudBlock: {
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+    },
     hudLabel: {
       fontSize: 10,
       letterSpacing: 2,
@@ -219,14 +237,24 @@ function HUD({
       color: "rgba(255,255,255,0.35)",
       fontWeight: 600,
     },
-    hudSublabel: { fontSize: 10, color: "rgba(255,255,255,0.25)", marginTop: 1 },
+    hudSublabel: {
+      fontSize: 10,
+      color: "rgba(255,255,255,0.25)",
+      marginTop: 1,
+    },
     hudValue: {
       fontSize: 24,
       fontWeight: 900,
       lineHeight: 1.1,
       fontFamily: '"Rajdhani", monospace',
     },
-    timerWrap: { display: "flex", alignItems: "center", gap: 12, width: "100%", maxWidth: 400 },
+    timerWrap: {
+      display: "flex",
+      alignItems: "center",
+      gap: 12,
+      width: "100%",
+      maxWidth: 400,
+    },
     timerBarBg: {
       flex: 1,
       height: 6,
@@ -234,7 +262,13 @@ function HUD({
       borderRadius: 3,
       overflow: "hidden",
     },
-    timerBar: { height: "100%", borderRadius: 3, transition: "width 0.1s linear, background 0.5s", background: timeColor, width: `${pct}%` },
+    timerBar: {
+      height: "100%",
+      borderRadius: 3,
+      transition: "width 0.1s linear, background 0.5s",
+      background: timeColor,
+      width: `${pct}%`,
+    },
     timerVal: {
       fontSize: 20,
       fontWeight: 900,
@@ -253,7 +287,12 @@ function HUD({
       letterSpacing: 3,
       textTransform: "uppercase",
     },
-    statusDot: { width: 8, height: 8, borderRadius: "50%", animation: "blink 0.8s ease infinite" },
+    statusDot: {
+      width: 8,
+      height: 8,
+      borderRadius: "50%",
+      animation: "blink 0.8s ease infinite",
+    },
   };
 
   return (
@@ -269,7 +308,9 @@ function HUD({
         </div>
         <div style={s.hudBlock}>
           <div style={s.hudLabel}>คะแนน</div>
-          <div style={{ ...s.hudValue, color: "#fff" }}>{score.toLocaleString()}</div>
+          <div style={{ ...s.hudValue, color: "#fff" }}>
+            {score.toLocaleString()}
+          </div>
         </div>
       </div>
 
@@ -298,12 +339,10 @@ function HUD({
 
       <div style={s.hudRight}>
         <div style={s.hudBlock}>
-          <div style={s.hudLabel}>โดน</div>
-          <div style={{ ...s.hudValue, color: "#00ff88" }}>{hitCount}</div>
+          <div style={s.hudLabel}> </div>
         </div>
         <div style={s.hudBlock}>
-          <div style={s.hudLabel}>พลาด</div>
-          <div style={{ ...s.hudValue, color: "#ff5050" }}>{missCount}</div>
+          <div style={s.hudLabel}> </div>
         </div>
       </div>
     </div>
@@ -317,7 +356,6 @@ function GameOverScreen({
   hitCount,
   missCount,
   currentLevel,
-  onRestart,
   onMenu,
   cleared,
 }: GameOverScreenProps) {
@@ -358,8 +396,18 @@ function GameOverScreen({
       margin: 0,
       textTransform: "uppercase",
     },
-    clearedSub: { color: "#ffcc00", fontSize: 18, letterSpacing: 3, textTransform: "uppercase" },
-    stats: { display: "flex", gap: 32, flexWrap: "wrap", justifyContent: "center" },
+    clearedSub: {
+      color: "#ffcc00",
+      fontSize: 18,
+      letterSpacing: 3,
+      textTransform: "uppercase",
+    },
+    stats: {
+      display: "flex",
+      gap: 32,
+      flexWrap: "wrap",
+      justifyContent: "center",
+    },
     stat: {
       display: "flex",
       flexDirection: "column",
@@ -370,8 +418,18 @@ function GameOverScreen({
       borderRadius: 4,
       padding: "16px 24px",
     },
-    slabel: { fontSize: 11, color: "rgba(255,255,255,0.35)", letterSpacing: 2, textTransform: "uppercase" },
-    sval: { fontSize: 36, fontWeight: 900, color: "#fff", fontFamily: '"Rajdhani", monospace' },
+    slabel: {
+      fontSize: 11,
+      color: "rgba(255,255,255,0.35)",
+      letterSpacing: 2,
+      textTransform: "uppercase",
+    },
+    sval: {
+      fontSize: 36,
+      fontWeight: 900,
+      color: "#fff",
+      fontFamily: '"Rajdhani", monospace',
+    },
     btns: { display: "flex", gap: 12 },
     btnBase: {
       padding: "13px 32px",
@@ -404,7 +462,9 @@ function GameOverScreen({
           </div>
           <div style={s.stat}>
             <span style={s.slabel}>คะแนนรวม</span>
-            <span style={{ ...s.sval, color: "#ffcc00" }}>{score.toLocaleString()}</span>
+            <span style={{ ...s.sval, color: "#ffcc00" }}>
+              {score.toLocaleString()}
+            </span>
           </div>
           <div style={s.stat}>
             <span style={s.slabel}>ยิงโดน</span>
@@ -417,13 +477,12 @@ function GameOverScreen({
         </div>
         <div style={s.btns}>
           <button
-            style={{ ...s.btnBase, background: "rgba(255,68,68,0.15)", borderColor: "rgba(255,68,68,0.5)", color: "#ff6666" }}
-            onClick={onRestart}
-          >
-            เล่นใหม่
-          </button>
-          <button
-            style={{ ...s.btnBase, background: "transparent", borderColor: "rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.45)" }}
+            style={{
+              ...s.btnBase,
+              background: "transparent",
+              borderColor: "rgba(255,255,255,0.12)",
+              color: "rgba(255,255,255,0.45)",
+            }}
             onClick={onMenu}
           >
             เมนูหลัก
@@ -435,24 +494,37 @@ function GameOverScreen({
 }
 
 // ==================== ResultScreen Component ====================
-
 function getRating(hitCount: number, total: number, avgReaction: number) {
   const accuracy = total > 0 ? hitCount / total : 0;
-  if (accuracy === 1 && avgReaction < 400) return { stars: 3, label: "PERFECT" };
-  if (accuracy >= 0.8 && avgReaction < 700) return { stars: 2, label: "EXCELLENT" };
+  if (accuracy === 1 && avgReaction < 400)
+    return { stars: 3, label: "PERFECT" };
+  if (accuracy >= 0.8 && avgReaction < 700)
+    return { stars: 2, label: "EXCELLENT" };
   if (accuracy >= 0.5) return { stars: 1, label: "GOOD" };
   return { stars: 0, label: "TRY AGAIN" };
 }
 
 function ResultScreen({
-  level, config, shots, hitCount, missCount, avgReaction,
-  score, isLastLevel, onNext, onRestart, onMenu,
+  level,
+  config,
+  shots,
+  hitCount,
+  missCount,
+  avgReaction,
+  score,
+  isLastLevel,
+  onNext,
+  onMenu,
 }: ResultScreenProps) {
   const totalTargets = config.targetCount;
   const rating = getRating(hitCount, totalTargets, avgReaction);
-  const accuracy = totalTargets > 0 ? Math.round((hitCount / totalTargets) * 100) : 0;
+  const accuracy =
+    totalTargets > 0 ? Math.round((hitCount / totalTargets) * 100) : 0;
   const hitShots = shots.filter((s: any) => s.hit);
-  const bestTime = hitShots.length > 0 ? Math.min(...hitShots.map((s: any) => s.reactionTime || 9999)) : 0;
+  const bestTime =
+    hitShots.length > 0
+      ? Math.min(...hitShots.map((s: any) => s.reactionTime || 9999))
+      : 0;
 
   const ratingColors = ["#ff5050", "#00ccff", "#00ffaa", "#ffcc00"];
   const ratingColor = ratingColors[rating.stars];
@@ -496,10 +568,26 @@ function ResultScreen({
       padding: "5px 16px",
       borderRadius: 2,
     },
-    ratingDisplay: { display: "flex", flexDirection: "column", alignItems: "center", gap: 8 },
+    ratingDisplay: {
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      gap: 8,
+    },
     stars: { display: "flex", gap: 8 },
-    ratingLabel: { fontSize: 28, fontWeight: 900, letterSpacing: 6, textTransform: "uppercase", color: ratingColor },
-    statsGrid: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, width: "100%" },
+    ratingLabel: {
+      fontSize: 28,
+      fontWeight: 900,
+      letterSpacing: 6,
+      textTransform: "uppercase",
+      color: ratingColor,
+    },
+    statsGrid: {
+      display: "grid",
+      gridTemplateColumns: "repeat(3, 1fr)",
+      gap: 10,
+      width: "100%",
+    },
     statCard: {
       background: "rgba(255,255,255,0.03)",
       border: "1px solid rgba(255,255,255,0.07)",
@@ -510,8 +598,19 @@ function ResultScreen({
       alignItems: "center",
       gap: 6,
     },
-    statVal: { fontSize: 26, fontWeight: 900, color: "#fff", fontFamily: '"Rajdhani", monospace', letterSpacing: 1 },
-    statLabel: { fontSize: 11, color: "rgba(255,255,255,0.35)", letterSpacing: 2, textTransform: "uppercase" },
+    statVal: {
+      fontSize: 26,
+      fontWeight: 900,
+      color: "#fff",
+      fontFamily: '"Rajdhani", monospace',
+      letterSpacing: 1,
+    },
+    statLabel: {
+      fontSize: 11,
+      color: "rgba(255,255,255,0.35)",
+      letterSpacing: 2,
+      textTransform: "uppercase",
+    },
     timeline: {
       width: "100%",
       background: "rgba(255,255,255,0.02)",
@@ -519,9 +618,20 @@ function ResultScreen({
       borderRadius: 4,
       padding: "14px 16px",
     },
-    timelineLabel: { fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "rgba(255,255,255,0.3)", marginBottom: 10 },
+    timelineLabel: {
+      fontSize: 11,
+      letterSpacing: 2,
+      textTransform: "uppercase",
+      color: "rgba(255,255,255,0.3)",
+      marginBottom: 10,
+    },
     timelineRow: { display: "flex", flexWrap: "wrap", gap: 6 },
-    actions: { display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center" },
+    actions: {
+      display: "flex",
+      gap: 12,
+      flexWrap: "wrap",
+      justifyContent: "center",
+    },
     btn: {
       padding: "12px 28px",
       fontFamily: '"Rajdhani", "Sarabun", sans-serif',
@@ -540,16 +650,24 @@ function ResultScreen({
     <div style={s.wrap}>
       <div style={s.bgGrid} />
       <div style={s.inner}>
-        <div style={s.badge}>ด่าน {level} — {config.label}</div>
+        <div style={s.badge}>
+          ด่าน {level} — {config.label}
+        </div>
 
         <div style={s.ratingDisplay}>
           <div style={s.stars}>
             {[0, 1, 2].map((i) => (
-              <span key={i} style={{
-                fontSize: 40,
-                color: i < rating.stars ? "#ffcc00" : "rgba(255,255,255,0.1)",
-                textShadow: i < rating.stars ? "0 0 20px rgba(255,204,0,0.6)" : "none",
-              }}>★</span>
+              <span
+                key={i}
+                style={{
+                  fontSize: 40,
+                  color: i < rating.stars ? "#ffcc00" : "rgba(255,255,255,0.1)",
+                  textShadow:
+                    i < rating.stars ? "0 0 20px rgba(255,204,0,0.6)" : "none",
+                }}
+              >
+                ★
+              </span>
             ))}
           </div>
           <div style={s.ratingLabel}>{rating.label}</div>
@@ -557,19 +675,57 @@ function ResultScreen({
 
         <div style={s.statsGrid}>
           {[
-            { icon: "🎯", val: `${hitCount}/${totalTargets}`, label: "เป้าที่โดน" },
+            {
+              icon: "🎯",
+              val: `${hitCount}/${totalTargets}`,
+              label: "เป้าที่โดน",
+            },
             { icon: "📊", val: `${accuracy}%`, label: "ความแม่น" },
-            { icon: "⚡", val: avgReaction > 0 ? `${avgReaction}ms` : "—", label: "ความเร็วเฉลี่ย" },
-            { icon: "🏆", val: bestTime > 0 ? `${bestTime}ms` : "—", label: "เร็วที่สุด" },
-            { icon: "✗", val: String(missCount), label: "ยิงพลาด", color: "#ff5050" },
-            { icon: "💫", val: score.toLocaleString(), label: "คะแนน", color: "#ffcc00", highlight: true },
+            {
+              icon: "⚡",
+              val: avgReaction > 0 ? `${avgReaction}ms` : "—",
+              label: "ความเร็วเฉลี่ย",
+            },
+            {
+              icon: "🏆",
+              val: bestTime > 0 ? `${bestTime}ms` : "—",
+              label: "เร็วที่สุด",
+            },
+            {
+              icon: "✗",
+              val: String(missCount),
+              label: "ยิงพลาด",
+              color: "#ff5050",
+            },
+            {
+              icon: "💫",
+              val: score.toLocaleString(),
+              label: "คะแนน",
+              color: "#ffcc00",
+              highlight: true,
+            },
           ].map((item: any, i) => (
-            <div key={i} style={{
-              ...s.statCard,
-              ...(item.highlight ? { background: "rgba(255,204,0,0.05)", border: "1px solid rgba(255,204,0,0.2)" } : {}),
-            }}>
+            <div
+              key={i}
+              style={{
+                ...s.statCard,
+                ...(item.highlight
+                  ? {
+                      background: "rgba(255,204,0,0.05)",
+                      border: "1px solid rgba(255,204,0,0.2)",
+                    }
+                  : {}),
+              }}
+            >
               <div style={{ fontSize: 20 }}>{item.icon}</div>
-              <div style={{ ...s.statVal, ...(item.color ? { color: item.color } : {}) }}>{item.val}</div>
+              <div
+                style={{
+                  ...s.statVal,
+                  ...(item.color ? { color: item.color } : {}),
+                }}
+              >
+                {item.val}
+              </div>
               <div style={s.statLabel}>{item.label}</div>
             </div>
           ))}
@@ -580,7 +736,14 @@ function ResultScreen({
             <div style={s.timelineLabel}>บันทึกการยิง</div>
             <div style={s.timelineRow}>
               {shots.map((shot: any, i: number) => (
-                <div key={i} style={{ fontSize: 14, cursor: "default", color: shot.hit ? "#00ff88" : "rgba(255,80,80,0.5)" }}>
+                <div
+                  key={i}
+                  style={{
+                    fontSize: 14,
+                    cursor: "default",
+                    color: shot.hit ? "#00ff88" : "rgba(255,80,80,0.5)",
+                  }}
+                >
                   {shot.hit ? "●" : "○"}
                 </div>
               ))}
@@ -590,14 +753,27 @@ function ResultScreen({
 
         <div style={s.actions}>
           {rating.stars > 0 && !isLastLevel && (
-            <button style={{ ...s.btn, background: "rgba(255,68,68,0.15)", borderColor: "rgba(255,68,68,0.5)", color: "#ff6666" }} onClick={onNext}>
+            <button
+              style={{
+                ...s.btn,
+                background: "rgba(255,68,68,0.15)",
+                borderColor: "rgba(255,68,68,0.5)",
+                color: "#ff6666",
+              }}
+              onClick={onNext}
+            >
               ด่านต่อไป →
             </button>
           )}
-          <button style={{ ...s.btn, background: "rgba(0,255,170,0.08)", borderColor: "rgba(0,255,170,0.3)", color: "#00ffaa" }} onClick={onRestart}>
-            เล่นซ้ำ
-          </button>
-          <button style={{ ...s.btn, background: "transparent", borderColor: "rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.45)" }} onClick={onMenu}>
+          <button
+            style={{
+              ...s.btn,
+              background: "transparent",
+              borderColor: "rgba(255,255,255,0.12)",
+              color: "rgba(255,255,255,0.45)",
+            }}
+            onClick={onMenu}
+          >
             เมนูหลัก
           </button>
         </div>
@@ -609,7 +785,15 @@ function ResultScreen({
 // ==================== GameCanvas Component ====================
 
 function GameCanvas(props: GameCanvasProps) {
-  const { state, getLevelConfig, startLevel, handleShoot, nextLevel, restartGame, goToMenu } = useGame(props.playerId, props.sessionId, props.onGameComplete);
+  const {
+    state,
+    getLevelConfig,
+    startLevel,
+    handleShoot,
+    nextLevel,
+    submitAndExit,
+    goToMenu,
+  } = useGame(props.playerId, props.sessionId, props.onGameComplete);
   const arenaRef = useRef<HTMLDivElement>(null);
   const [shotEffects, setShotEffects] = useState<ShotEffect[]>([]);
   const effectIdRef = useRef(0);
@@ -623,7 +807,9 @@ function GameCanvas(props: GameCanvasProps) {
       const y = ((e.clientY - rect.top) / rect.height) * 100;
 
       const id = ++effectIdRef.current;
-      const activeTarget = state.targets.find((t) => t.id === state.activeTargetId && t.isActive);
+      const activeTarget = state.targets.find(
+        (t) => t.id === state.activeTargetId && t.isActive,
+      );
       let hit = false;
       if (activeTarget) {
         const dx = activeTarget.x - x;
@@ -632,10 +818,13 @@ function GameCanvas(props: GameCanvasProps) {
       }
 
       setShotEffects((prev) => [...prev, { id, x, y, hit }]);
-      setTimeout(() => setShotEffects((prev) => prev.filter((e) => e.id !== id)), 600);
+      setTimeout(
+        () => setShotEffects((prev) => prev.filter((e) => e.id !== id)),
+        600,
+      );
       handleShoot(x, y);
     },
-    [state.phase, state.targets, state.activeTargetId, handleShoot]
+    [state.phase, state.targets, state.activeTargetId, handleShoot],
   );
 
   const config = getLevelConfig(state.currentLevel);
@@ -646,7 +835,9 @@ function GameCanvas(props: GameCanvasProps) {
 
   useEffect(() => {
     document.body.style.cursor = isShooting ? "crosshair" : "default";
-    return () => { document.body.style.cursor = "default"; };
+    return () => {
+      document.body.style.cursor = "default";
+    };
   }, [isShooting]);
 
   if (state.phase === "menu") return <MenuScreen onStart={startLevel} />;
@@ -658,8 +849,7 @@ function GameCanvas(props: GameCanvasProps) {
         hitCount={state.hitCount}
         missCount={state.missCount}
         currentLevel={state.currentLevel}
-        onRestart={restartGame}
-        onMenu={goToMenu}
+        onMenu={submitAndExit}
         cleared={state.levelComplete}
       />
     );
@@ -667,9 +857,12 @@ function GameCanvas(props: GameCanvasProps) {
 
   if (state.phase === "result") {
     const hits = state.shots.filter((s) => s.hit);
-    const avgReaction = hits.length > 0
-      ? Math.round(hits.reduce((a, s) => a + (s.reactionTime || 0), 0) / hits.length)
-      : 0;
+    const avgReaction =
+      hits.length > 0
+        ? Math.round(
+            hits.reduce((a, s) => a + (s.reactionTime || 0), 0) / hits.length,
+          )
+        : 0;
     const isLastLevel = state.currentLevel >= LEVELS.length;
     return (
       <ResultScreen
@@ -682,8 +875,7 @@ function GameCanvas(props: GameCanvasProps) {
         score={state.score}
         isLastLevel={isLastLevel}
         onNext={nextLevel}
-        onRestart={() => startLevel(state.currentLevel)}
-        onMenu={goToMenu}
+        onMenu={isLastLevel ? submitAndExit : goToMenu}
       />
     );
   }
@@ -724,11 +916,16 @@ function GameCanvas(props: GameCanvasProps) {
       `}</style>
 
       {/* BG grid */}
-      <div style={{
-        position: "absolute", inset: 0, pointerEvents: "none",
-        backgroundImage: "linear-gradient(rgba(0,255,170,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0,255,170,0.03) 1px, transparent 1px)",
-        backgroundSize: "40px 40px",
-      }} />
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          pointerEvents: "none",
+          backgroundImage:
+            "linear-gradient(rgba(0,255,170,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0,255,170,0.03) 1px, transparent 1px)",
+          backgroundSize: "40px 40px",
+        }}
+      />
 
       {/* HUD */}
       {(isShooting || isMemorize || isBlackout) && (
@@ -746,18 +943,31 @@ function GameCanvas(props: GameCanvasProps) {
 
       {/* Arena */}
       <div ref={arenaRef} onClick={onArenaClick} style={arenaStyle}>
-
         {/* Memorize label */}
         {isMemorize && (
-          <div style={{
-            position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
-            pointerEvents: "none", zIndex: 5,
-            display: "flex", alignItems: "center", gap: 10,
-            background: "rgba(0,255,170,0.1)", border: "1px solid rgba(0,255,170,0.3)",
-            padding: "10px 24px", borderRadius: 4,
-            color: "#00ffaa", fontSize: 20, fontWeight: 700, letterSpacing: 2,
-            textTransform: "uppercase", animation: "fadeInOut 0.5s ease",
-          }}>
+          <div
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%,-50%)",
+              pointerEvents: "none",
+              zIndex: 5,
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              background: "rgba(0,255,170,0.1)",
+              border: "1px solid rgba(0,255,170,0.3)",
+              padding: "10px 24px",
+              borderRadius: 4,
+              color: "#00ffaa",
+              fontSize: 20,
+              fontWeight: 700,
+              letterSpacing: 2,
+              textTransform: "uppercase",
+              animation: "fadeInOut 0.5s ease",
+            }}
+          >
             <span style={{ fontSize: 24 }}>👁</span>
             <span>จำตำแหน่งเป้าหมาย!</span>
           </div>
@@ -765,139 +975,230 @@ function GameCanvas(props: GameCanvasProps) {
 
         {/* Blackout overlay */}
         {isBlackout && (
-          <div style={{
-            position: "absolute", inset: 0, background: "#000",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            zIndex: 10, animation: "blackoutIn 0.15s ease",
-          }}>
-            <div style={{
-              color: "#ff3232", fontSize: 32, fontWeight: 900,
-              letterSpacing: 6, textTransform: "uppercase",
-              display: "flex", flexDirection: "column", alignItems: "center", gap: 10,
-            }}>
-              <div style={{ fontSize: 48, animation: "flash 0.5s infinite alternate" }}>⚡</div>
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              background: "#000",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 10,
+              animation: "blackoutIn 0.15s ease",
+            }}
+          >
+            <div
+              style={{
+                color: "#ff3232",
+                fontSize: 32,
+                fontWeight: 900,
+                letterSpacing: 6,
+                textTransform: "uppercase",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 10,
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 48,
+                  animation: "flash 0.5s infinite alternate",
+                }}
+              >
+                ⚡
+              </div>
               <div>เตรียมพร้อม...</div>
             </div>
           </div>
         )}
 
         {/* Targets */}
-        {showTargets && state.targets.map((target) => {
-          const isActive = target.isActive;
-          const isHit = target.isHit;
+        {showTargets &&
+          state.targets.map((target) => {
+            const isActive = target.isActive;
+            const isHit = target.isHit;
 
-          const ringOuterColor = isActive
-            ? "rgba(255,80,80,0.7)"
-            : isHit ? "rgba(0,255,100,0.3)"
-            : isMemorize ? "rgba(0,200,255,0.5)"
-            : "rgba(255,255,255,0.15)";
-          const ringMidColor = isActive
-            ? "rgba(255,80,80,0.85)"
-            : isHit ? "rgba(0,255,100,0.4)"
-            : isMemorize ? "rgba(0,200,255,0.6)"
-            : "rgba(255,255,255,0.2)";
-          const ringInnerColor = isActive
-            ? "#ff5050"
-            : isHit ? "rgba(0,255,100,0.5)"
-            : isMemorize ? "rgba(0,200,255,0.8)"
-            : "rgba(255,255,255,0.3)";
-          const centerBg = isActive
-            ? "#ff5050"
-            : isHit ? "rgba(0,255,100,0.6)"
-            : isMemorize ? "rgba(0,200,255,0.9)"
-            : "rgba(255,255,255,0.4)";
+            const ringOuterColor = isActive
+              ? "rgba(255,80,80,0.7)"
+              : isHit
+                ? "rgba(0,255,100,0.3)"
+                : isMemorize
+                  ? "rgba(0,200,255,0.5)"
+                  : "rgba(255,255,255,0.15)";
+            const ringMidColor = isActive
+              ? "rgba(255,80,80,0.85)"
+              : isHit
+                ? "rgba(0,255,100,0.4)"
+                : isMemorize
+                  ? "rgba(0,200,255,0.6)"
+                  : "rgba(255,255,255,0.2)";
+            const ringInnerColor = isActive
+              ? "#ff5050"
+              : isHit
+                ? "rgba(0,255,100,0.5)"
+                : isMemorize
+                  ? "rgba(0,200,255,0.8)"
+                  : "rgba(255,255,255,0.3)";
+            const centerBg = isActive
+              ? "#ff5050"
+              : isHit
+                ? "rgba(0,255,100,0.6)"
+                : isMemorize
+                  ? "rgba(0,200,255,0.9)"
+                  : "rgba(255,255,255,0.4)";
 
-          return (
-            <div key={target.id} style={{
-              position: "absolute",
-              width: 64, height: 64,
-              left: `${target.x}%`, top: `${target.y}%`,
-              transform: "translate(-50%,-50%)",
-              pointerEvents: "none",
-            }}>
-              <div style={{ position: "relative", width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                {/* Rings */}
-                {[
-                  { size: 60, color: ringOuterColor },
-                  { size: 40, color: ringMidColor },
-                  { size: 22, color: ringInnerColor },
-                ].map((ring, i) => (
-                  <div key={i} style={{
-                    position: "absolute",
-                    width: ring.size, height: ring.size,
-                    borderRadius: "50%",
-                    border: `2px solid ${ring.color}`,
-                  }} />
-                ))}
-                <div style={{
-                  width: 10, height: 10,
-                  background: centerBg,
-                  borderRadius: "50%",
-                  ...(isActive ? { boxShadow: "0 0 10px #ff5050" } : {}),
-                }} />
-                {isActive && (
-                  <div style={{
-                    position: "absolute",
-                    width: 64, height: 64,
-                    borderRadius: "50%",
-                    border: "2px solid rgba(255,80,80,0.6)",
-                    animation: "pulseRing 0.7s ease-out infinite",
-                  }} />
-                )}
-                {isHit && (
-                  <div style={{
-                    position: "absolute",
-                    fontSize: 20, color: "#00ff64",
-                    fontWeight: 900, textShadow: "0 0 10px #00ff64", zIndex: 2,
-                  }}>✓</div>
+            return (
+              <div
+                key={target.id}
+                style={{
+                  position: "absolute",
+                  width: 64,
+                  height: 64,
+                  left: `${target.x}%`,
+                  top: `${target.y}%`,
+                  transform: "translate(-50%,-50%)",
+                  pointerEvents: "none",
+                }}
+              >
+                <div
+                  style={{
+                    position: "relative",
+                    width: "100%",
+                    height: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {/* Rings */}
+                  {[
+                    { size: 60, color: ringOuterColor },
+                    { size: 40, color: ringMidColor },
+                    { size: 22, color: ringInnerColor },
+                  ].map((ring, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        position: "absolute",
+                        width: ring.size,
+                        height: ring.size,
+                        borderRadius: "50%",
+                        border: `2px solid ${ring.color}`,
+                      }}
+                    />
+                  ))}
+                  <div
+                    style={{
+                      width: 10,
+                      height: 10,
+                      background: centerBg,
+                      borderRadius: "50%",
+                      ...(isActive ? { boxShadow: "0 0 10px #ff5050" } : {}),
+                    }}
+                  />
+                  {isActive && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        width: 64,
+                        height: 64,
+                        borderRadius: "50%",
+                        border: "2px solid rgba(255,80,80,0.6)",
+                        animation: "pulseRing 0.7s ease-out infinite",
+                      }}
+                    />
+                  )}
+                  {isHit && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        fontSize: 20,
+                        color: "#00ff64",
+                        fontWeight: 900,
+                        textShadow: "0 0 10px #00ff64",
+                        zIndex: 2,
+                      }}
+                    >
+                      ✓
+                    </div>
+                  )}
+                </div>
+                {isMemorize && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: -22,
+                      left: "50%",
+                      transform: "translateX(-50%)",
+                      color: "rgba(0,200,255,0.9)",
+                      fontSize: 13,
+                      fontWeight: 700,
+                      letterSpacing: 1,
+                      background: "rgba(0,0,0,0.6)",
+                      padding: "1px 6px",
+                      borderRadius: 3,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {target.id + 1}
+                  </div>
                 )}
               </div>
-              {isMemorize && (
-                <div style={{
-                  position: "absolute", top: -22, left: "50%", transform: "translateX(-50%)",
-                  color: "rgba(0,200,255,0.9)", fontSize: 13, fontWeight: 700, letterSpacing: 1,
-                  background: "rgba(0,0,0,0.6)", padding: "1px 6px", borderRadius: 3, whiteSpace: "nowrap",
-                }}>
-                  {target.id + 1}
-                </div>
-              )}
-            </div>
-          );
-        })}
+            );
+          })}
 
         {/* Shot effects */}
         {shotEffects.map((effect) => (
-          <div key={effect.id} style={{
-            position: "absolute",
-            width: 20, height: 20,
-            borderRadius: "50%",
-            pointerEvents: "none",
-            left: `${effect.x}%`, top: `${effect.y}%`,
-            transform: "translate(-50%,-50%)",
-            animation: "shotAnim 0.5s ease-out forwards",
-            zIndex: 20,
-            background: effect.hit
-              ? "radial-gradient(circle, rgba(0,255,100,0.9), rgba(0,255,100,0))"
-              : "radial-gradient(circle, rgba(255,80,80,0.9), rgba(255,80,80,0))",
-            boxShadow: effect.hit
-              ? "0 0 20px rgba(0,255,100,0.8)"
-              : "0 0 15px rgba(255,80,80,0.6)",
-          }} />
+          <div
+            key={effect.id}
+            style={{
+              position: "absolute",
+              width: 20,
+              height: 20,
+              borderRadius: "50%",
+              pointerEvents: "none",
+              left: `${effect.x}%`,
+              top: `${effect.y}%`,
+              transform: "translate(-50%,-50%)",
+              animation: "shotAnim 0.5s ease-out forwards",
+              zIndex: 20,
+              background: effect.hit
+                ? "radial-gradient(circle, rgba(0,255,100,0.9), rgba(0,255,100,0))"
+                : "radial-gradient(circle, rgba(255,80,80,0.9), rgba(255,80,80,0))",
+              boxShadow: effect.hit
+                ? "0 0 20px rgba(0,255,100,0.8)"
+                : "0 0 15px rgba(255,80,80,0.6)",
+            }}
+          />
         ))}
 
         {/* Waiting signal */}
         {isShooting && state.activeTargetId === null && (
-          <div style={{
-            position: "absolute", bottom: 24, left: "50%", transform: "translateX(-50%)",
-            display: "flex", alignItems: "center", gap: 10,
-            color: "rgba(255,255,255,0.4)", fontSize: 14, letterSpacing: 3, textTransform: "uppercase",
-          }}>
-            <div style={{
-              width: 8, height: 8,
-              background: "rgba(0,255,170,0.6)",
-              borderRadius: "50%",
-              animation: "blink 1s ease infinite",
-            }} />
+          <div
+            style={{
+              position: "absolute",
+              bottom: 24,
+              left: "50%",
+              transform: "translateX(-50%)",
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              color: "rgba(255,255,255,0.4)",
+              fontSize: 14,
+              letterSpacing: 3,
+              textTransform: "uppercase",
+            }}
+          >
+            <div
+              style={{
+                width: 8,
+                height: 8,
+                background: "rgba(0,255,170,0.6)",
+                borderRadius: "50%",
+                animation: "blink 1s ease infinite",
+              }}
+            />
             <span>รอสัญญาณ...</span>
           </div>
         )}

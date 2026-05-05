@@ -7,7 +7,7 @@ import {
 } from "react";
 import { useGame } from "./logic";
 import { LEVELS } from "./types";
-import type { GameResult, GamePhase, LevelConfig } from "./types";
+import type { GameResult, GamePhase, LevelConfig, Shot } from "./types";
 
 // ==================== Types & Interfaces ====================
 
@@ -25,10 +25,7 @@ interface MenuScreenProps {
 interface HUDProps {
   phase: GamePhase;
   level: number;
-  config: LevelConfig;
   score: number;
-  hitCount: number;
-  missCount: number;
   timeLeft: number;
   totalTime: number;
 }
@@ -37,6 +34,8 @@ interface GameOverScreenProps {
   score: number;
   hitCount: number;
   missCount: number;
+  centerHitCount: number;
+  earlyClickCount: number;
   currentLevel: number;
   onMenu: () => void;
   cleared: boolean;
@@ -45,10 +44,12 @@ interface GameOverScreenProps {
 interface ResultScreenProps {
   level: number;
   config: LevelConfig;
-  shots: any[];
+  shots: Shot[];
   hitCount: number;
   missCount: number;
+  centerHitCount: number;
   avgReaction: number;
+  avgSwitch: number;
   score: number;
   isLastLevel: boolean;
   onNext: () => void;
@@ -192,16 +193,7 @@ function MenuScreen({ onStart }: MenuScreenProps) {
 
 // ==================== HUD Component ====================
 
-function HUD({
-  phase,
-  level,
-  config,
-  score,
-  hitCount,
-  missCount,
-  timeLeft,
-  totalTime,
-}: HUDProps) {
+function HUD({ phase, level, score, timeLeft, totalTime }: HUDProps) {
   const pct = totalTime > 0 ? (timeLeft / totalTime) * 100 : 100;
   const timeColor = pct > 50 ? "#00ffaa" : pct > 25 ? "#ffaa00" : "#ff4444";
   const secs = (timeLeft / 1000).toFixed(1);
@@ -348,6 +340,8 @@ function GameOverScreen({
   score,
   hitCount,
   missCount,
+  centerHitCount,
+  earlyClickCount,
   currentLevel,
   onMenu,
   cleared,
@@ -469,6 +463,18 @@ function GameOverScreen({
             <span style={s.slabel}>Misses</span>
             <span style={{ ...s.sval, color: "#ff5050" }}>{missCount}</span>
           </div>
+          <div style={s.stat}>
+            <span style={s.slabel}>Center Hits</span>
+            <span style={{ ...s.sval, color: "#00ccff" }}>
+              {centerHitCount}
+            </span>
+          </div>
+          <div style={s.stat}>
+            <span style={s.slabel}>Early Clicks</span>
+            <span style={{ ...s.sval, color: "#ff8844" }}>
+              {earlyClickCount}
+            </span>
+          </div>
         </div>
         <div style={s.btns}>
           <button
@@ -505,7 +511,9 @@ function ResultScreen({
   shots,
   hitCount,
   missCount,
+  centerHitCount,
   avgReaction,
+  avgSwitch,
   score,
   isLastLevel,
   onNext,
@@ -515,10 +523,10 @@ function ResultScreen({
   const rating = getRating(hitCount, totalTargets, avgReaction);
   const accuracy =
     totalTargets > 0 ? Math.round((hitCount / totalTargets) * 100) : 0;
-  const hitShots = shots.filter((s: any) => s.hit);
+  const hitShots = shots.filter((s) => s.hit);
   const bestTime =
     hitShots.length > 0
-      ? Math.min(...hitShots.map((s: any) => s.reactionTime || 9999))
+      ? Math.min(...hitShots.map((s) => s.reactionTime || 9999))
       : 0;
 
   const ratingColors = ["#ff5050", "#00ccff", "#00ffaa", "#ffcc00"];
@@ -551,7 +559,7 @@ function ResultScreen({
       alignItems: "center",
       gap: 28,
       padding: "40px 20px",
-      maxWidth: 600,
+      maxWidth: 760,
       width: "100%",
     },
     badge: {
@@ -579,7 +587,7 @@ function ResultScreen({
     },
     statsGrid: {
       display: "grid",
-      gridTemplateColumns: "repeat(3, 1fr)",
+      gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
       gap: 10,
       width: "100%",
     },
@@ -677,9 +685,10 @@ function ResultScreen({
             },
             { icon: "📊", val: `${accuracy}%`, label: "Accuracy" },
             {
-              icon: "⚡",
-              val: avgReaction > 0 ? `${avgReaction}ms` : "—",
-              label: "Avg Reaction",
+              icon: "💫",
+              val: score.toLocaleString(),
+              label: "Score",
+              color: "#fff",
             },
             {
               icon: "🏆",
@@ -687,15 +696,26 @@ function ResultScreen({
               label: "Fastest",
             },
             {
-              icon: "✗",
+              icon: "🔁",
+              val: avgSwitch > 0 ? `${avgSwitch}ms` : "-",
+              label: "Avg Switch",
+            },
+            {
+              icon: "🎯",
+              val: String(centerHitCount),
+              label: "Center Hits",
+              color: "#00ccff",
+            },
+            {
+              icon: "❌️",
               val: String(missCount),
               label: "Misses",
               color: "#ff5050",
             },
             {
-              icon: "💫",
-              val: score.toLocaleString(),
-              label: "Score",
+              icon: "⚡",
+              val: avgReaction > 0 ? `${avgReaction}ms` : "—",
+              label: "Avg Reaction",
               color: "#ffcc00",
               highlight: true,
             },
@@ -704,18 +724,46 @@ function ResultScreen({
               key={i}
               style={{
                 ...s.statCard,
+                order:
+                  item.label === "Targets Hit"
+                    ? 1
+                    : item.label === "Accuracy"
+                      ? 2
+                      : item.label === "Center Hits"
+                        ? 3
+                        : item.label === "Misses"
+                          ? 4
+                          : item.label === "Score"
+                            ? 5
+                            : item.label === "Fastest"
+                              ? 6
+                              : item.label === "Avg Switch"
+                                ? 7
+                                : item.label === "Avg Reaction"
+                                  ? 99
+                                  : 50,
                 ...(item.highlight
                   ? {
                       background: "rgba(255,204,0,0.05)",
                       border: "1px solid rgba(255,204,0,0.2)",
                     }
                   : {}),
+                ...(item.fullWidth
+                  ? {
+                      gridColumn: "1 / -1",
+                      minHeight: 120,
+                      justifyContent: "center",
+                    }
+                  : {}),
               }}
             >
-              <div style={{ fontSize: 20 }}>{item.icon}</div>
+              <div style={{ fontSize: item.fullWidth ? 24 : 20 }}>
+                {item.icon}
+              </div>
               <div
                 style={{
                   ...s.statVal,
+                  ...(item.fullWidth ? { fontSize: 44 } : {}),
                   ...(item.color ? { color: item.color } : {}),
                 }}
               >
@@ -823,10 +871,9 @@ function GameCanvas(props: GameCanvasProps) {
   );
 
   const config = getLevelConfig(state.currentLevel);
-  const isMemorize = state.phase === "memorize";
-  const isBlackout = state.phase === "blackout";
   const isShooting = state.phase === "shooting";
-  const showTargets = isMemorize || isShooting;
+  const showTargets =
+    isShooting && state.targets.some((t) => t.isActive || t.isHit);
 
   useEffect(() => {
     document.body.style.cursor = isShooting ? "crosshair" : "default";
@@ -843,6 +890,8 @@ function GameCanvas(props: GameCanvasProps) {
         score={state.score}
         hitCount={state.hitCount}
         missCount={state.missCount}
+        centerHitCount={state.centerHitCount}
+        earlyClickCount={state.earlyClickCount}
         currentLevel={state.currentLevel}
         onMenu={submitAndExit}
         cleared={state.levelComplete}
@@ -852,10 +901,19 @@ function GameCanvas(props: GameCanvasProps) {
 
   if (state.phase === "result") {
     const hits = state.shots.filter((s) => s.hit);
+    const switchTimes = hits
+      .map((s) => s.switchTime)
+      .filter((time): time is number => typeof time === "number");
     const avgReaction =
       hits.length > 0
         ? Math.round(
             hits.reduce((a, s) => a + (s.reactionTime || 0), 0) / hits.length,
+          )
+        : 0;
+    const avgSwitch =
+      switchTimes.length > 0
+        ? Math.round(
+            switchTimes.reduce((a, time) => a + time, 0) / switchTimes.length,
           )
         : 0;
     const isLastLevel = state.currentLevel >= LEVELS.length;
@@ -866,7 +924,9 @@ function GameCanvas(props: GameCanvasProps) {
         shots={state.shots}
         hitCount={state.hitCount}
         missCount={state.missCount}
+        centerHitCount={state.centerHitCount}
         avgReaction={avgReaction}
+        avgSwitch={avgSwitch}
         score={state.score}
         isLastLevel={isLastLevel}
         onNext={nextLevel}
@@ -890,9 +950,9 @@ function GameCanvas(props: GameCanvasProps) {
     flex: 1,
     position: "relative",
     margin: "0 16px 16px",
-    border: `1px solid ${isShooting ? "rgba(0,255,170,0.25)" : isBlackout ? "rgba(255,50,50,0.3)" : "rgba(0,255,170,0.1)"}`,
+    border: `1px solid ${isShooting ? "rgba(0,255,170,0.25)" : "rgba(0,255,170,0.1)"}`,
     borderRadius: 4,
-    background: isBlackout ? "#000" : "rgba(0,0,0,0.4)",
+    background: "rgba(0,0,0,0.4)",
     overflow: "hidden",
     transition: "border-color 0.3s",
     userSelect: "none",
@@ -905,8 +965,6 @@ function GameCanvas(props: GameCanvasProps) {
         @keyframes pulseRing { 0% { transform: scale(1); opacity:0.8; } 100% { transform: scale(1.7); opacity:0; } }
         @keyframes shotAnim { 0% { transform: translate(-50%,-50%) scale(0.5); opacity:1; } 100% { transform: translate(-50%,-50%) scale(2.5); opacity:0; } }
         @keyframes blink { 0%,100% { opacity:1; } 50% { opacity:0.2; } }
-        @keyframes flash { to { opacity:0.2; } }
-        @keyframes blackoutIn { from { opacity:0; } to { opacity:1; } }
         @keyframes fadeInOut { from { opacity:0; transform: translate(-50%,-60%); } to { opacity:1; transform: translate(-50%,-50%); } }
       `}</style>
 
@@ -923,14 +981,11 @@ function GameCanvas(props: GameCanvasProps) {
       />
 
       {/* HUD */}
-      {(isShooting || isMemorize || isBlackout) && (
+      {isShooting && (
         <HUD
           phase={state.phase}
           level={state.currentLevel}
-          config={config}
           score={state.score}
-          hitCount={state.hitCount}
-          missCount={state.missCount}
           timeLeft={state.shootingTimeLeft}
           totalTime={config.shootingTime}
         />
@@ -938,76 +993,44 @@ function GameCanvas(props: GameCanvasProps) {
 
       {/* Arena */}
       <div ref={arenaRef} onClick={onArenaClick} style={arenaStyle}>
-        {/* Memorize label */}
-        {isMemorize && (
-          <div
-            style={{
-              position: "absolute",
-              top: "50%",
-              left: "50%",
-              transform: "translate(-50%,-50%)",
-              pointerEvents: "none",
-              zIndex: 5,
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              background: "rgba(0,255,170,0.1)",
-              border: "1px solid rgba(0,255,170,0.3)",
-              padding: "10px 24px",
-              borderRadius: 4,
-              color: "#00ffaa",
-              fontSize: 20,
-              fontWeight: 700,
-              letterSpacing: 2,
-              textTransform: "uppercase",
-              animation: "fadeInOut 0.5s ease",
-            }}
-          >
-            <span style={{ fontSize: 24 }}>👁</span>
-            <span className="uppercase">Remember the position!</span>
-          </div>
-        )}
-
-        {/* Blackout overlay */}
-        {isBlackout && (
+        {/* Waiting signal */}
+        {isShooting && state.activeTargetId === null && !showTargets && (
           <div
             style={{
               position: "absolute",
               inset: 0,
-              background: "#000",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              zIndex: 10,
-              animation: "blackoutIn 0.15s ease",
+              pointerEvents: "none",
+              zIndex: 5,
             }}
           >
             <div
               style={{
-                color: "#ff3232",
-                fontSize: 32,
-                fontWeight: 900,
-                letterSpacing: 6,
-                textTransform: "uppercase",
                 display: "flex",
-                flexDirection: "column",
                 alignItems: "center",
                 gap: 10,
+                color: "rgba(255,255,255,0.55)",
+                fontSize: 16,
+                fontWeight: 700,
+                letterSpacing: 3,
+                textTransform: "uppercase",
               }}
             >
               <div
                 style={{
-                  fontSize: 48,
-                  animation: "flash 0.5s infinite alternate",
+                  width: 8,
+                  height: 8,
+                  background: "rgba(0,255,170,0.7)",
+                  borderRadius: "50%",
+                  animation: "blink 1s ease infinite",
                 }}
-              >
-                ⚡
-              </div>
-              <div>Get Ready...</div>
+              />
+              <span>Waiting for signal...</span>
             </div>
           </div>
         )}
-
         {/* Targets */}
         {showTargets &&
           state.targets.map((target) => {
@@ -1018,30 +1041,22 @@ function GameCanvas(props: GameCanvasProps) {
               ? "rgba(255,80,80,0.7)"
               : isHit
                 ? "rgba(0,255,100,0.3)"
-                : isMemorize
-                  ? "rgba(0,200,255,0.5)"
-                  : "rgba(255,255,255,0.15)";
+                : "rgba(255,255,255,0.15)";
             const ringMidColor = isActive
               ? "rgba(255,80,80,0.85)"
               : isHit
                 ? "rgba(0,255,100,0.4)"
-                : isMemorize
-                  ? "rgba(0,200,255,0.6)"
-                  : "rgba(255,255,255,0.2)";
+                : "rgba(255,255,255,0.2)";
             const ringInnerColor = isActive
               ? "#ff5050"
               : isHit
                 ? "rgba(0,255,100,0.5)"
-                : isMemorize
-                  ? "rgba(0,200,255,0.8)"
-                  : "rgba(255,255,255,0.3)";
+                : "rgba(255,255,255,0.3)";
             const centerBg = isActive
               ? "#ff5050"
               : isHit
                 ? "rgba(0,255,100,0.6)"
-                : isMemorize
-                  ? "rgba(0,200,255,0.9)"
-                  : "rgba(255,255,255,0.4)";
+                : "rgba(255,255,255,0.4)";
 
             return (
               <div
@@ -1119,26 +1134,6 @@ function GameCanvas(props: GameCanvasProps) {
                     </div>
                   )}
                 </div>
-                {isMemorize && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: -22,
-                      left: "50%",
-                      transform: "translateX(-50%)",
-                      color: "rgba(0,200,255,0.9)",
-                      fontSize: 13,
-                      fontWeight: 700,
-                      letterSpacing: 1,
-                      background: "rgba(0,0,0,0.6)",
-                      padding: "1px 6px",
-                      borderRadius: 3,
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {target.id + 1}
-                  </div>
-                )}
               </div>
             );
           })}
@@ -1167,36 +1162,6 @@ function GameCanvas(props: GameCanvasProps) {
             }}
           />
         ))}
-
-        {/* Waiting signal */}
-        {isShooting && state.activeTargetId === null && (
-          <div
-            style={{
-              position: "absolute",
-              bottom: 24,
-              left: "50%",
-              transform: "translateX(-50%)",
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              color: "rgba(255,255,255,0.4)",
-              fontSize: 14,
-              letterSpacing: 3,
-              textTransform: "uppercase",
-            }}
-          >
-            <div
-              style={{
-                width: 8,
-                height: 8,
-                background: "rgba(0,255,170,0.6)",
-                borderRadius: "50%",
-                animation: "blink 1s ease infinite",
-              }}
-            />
-            <span>Waiting for signal...</span>
-          </div>
-        )}
       </div>
     </div>
   );

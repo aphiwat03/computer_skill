@@ -1,10 +1,4 @@
-export type GamePhase =
-  | "menu"
-  | "memorize"
-  | "blackout"
-  | "shooting"
-  | "result"
-  | "gameover";
+export type GamePhase = "menu" | "shooting" | "result" | "gameover";
 
 export interface Target {
   id: number;
@@ -19,15 +13,20 @@ export interface Shot {
   x: number;
   y: number;
   hit: boolean;
+  targetId?: number | null;
   reactionTime?: number;
+  switchTime?: number;
+  distanceFromCenter?: number;
+  accuracyScore?: number;
+  isCenterHit?: boolean;
+  isEarlyClick?: boolean;
+  scoreDelta?: number;
   timestamp: number;
 }
 
 export interface LevelConfig {
   level: number;
   targetCount: number;
-  memorizeTime: number;
-  blackoutTime: number;
   shootingTime: number;
   signalInterval: number;
   label: string;
@@ -43,7 +42,10 @@ export interface GameState {
   lives: number;
   missCount: number;
   hitCount: number;
+  centerHitCount: number;
+  earlyClickCount: number;
   currentReactionStart: number | null;
+  lastHitAt: number | null;
   levelComplete: boolean;
   totalTime: number;
   shootingTimeLeft: number;
@@ -69,8 +71,6 @@ export const LEVELS: LevelConfig[] = [
   {
     level: 1,
     targetCount: 3,
-    memorizeTime: 4000,
-    blackoutTime: 1000,
     shootingTime: 30000,
     signalInterval: 3000,
     label: "Beginner",
@@ -78,8 +78,6 @@ export const LEVELS: LevelConfig[] = [
   {
     level: 2,
     targetCount: 5,
-    memorizeTime: 4000,
-    blackoutTime: 1200,
     shootingTime: 28000,
     signalInterval: 2500,
     label: "Training",
@@ -87,8 +85,6 @@ export const LEVELS: LevelConfig[] = [
   {
     level: 3,
     targetCount: 7,
-    memorizeTime: 3500,
-    blackoutTime: 1500,
     shootingTime: 25000,
     signalInterval: 2000,
     label: "Intermediate",
@@ -96,8 +92,6 @@ export const LEVELS: LevelConfig[] = [
   {
     level: 4,
     targetCount: 9,
-    memorizeTime: 3000,
-    blackoutTime: 1800,
     shootingTime: 22000,
     signalInterval: 1800,
     label: "Advanced",
@@ -105,8 +99,6 @@ export const LEVELS: LevelConfig[] = [
   {
     level: 5,
     targetCount: 11,
-    memorizeTime: 2500,
-    blackoutTime: 2000,
     shootingTime: 20000,
     signalInterval: 1500,
     label: "Sharpshooter",

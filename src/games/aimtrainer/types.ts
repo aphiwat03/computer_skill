@@ -73,7 +73,7 @@ export const LEVELS: LevelConfig[] = [
     blackoutTime: 1000,
     shootingTime: 30000,
     signalInterval: 3000,
-    label: "มือใหม่",
+    label: "Beginner",
   },
   {
     level: 2,
@@ -82,7 +82,7 @@ export const LEVELS: LevelConfig[] = [
     blackoutTime: 1200,
     shootingTime: 28000,
     signalInterval: 2500,
-    label: "ฝึกหัด",
+    label: "Training",
   },
   {
     level: 3,
@@ -91,7 +91,7 @@ export const LEVELS: LevelConfig[] = [
     blackoutTime: 1500,
     shootingTime: 25000,
     signalInterval: 2000,
-    label: "ปานกลาง",
+    label: "Intermediate",
   },
   {
     level: 4,
@@ -100,7 +100,7 @@ export const LEVELS: LevelConfig[] = [
     blackoutTime: 1800,
     shootingTime: 22000,
     signalInterval: 1800,
-    label: "เชี่ยวชาญ",
+    label: "Advanced",
   },
   {
     level: 5,
@@ -109,6 +109,6 @@ export const LEVELS: LevelConfig[] = [
     blackoutTime: 2000,
     shootingTime: 20000,
     signalInterval: 1500,
-    label: "นักแม่นปืน",
+    label: "Sharpshooter",
   },
 ];

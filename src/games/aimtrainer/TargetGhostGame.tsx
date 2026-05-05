@@ -120,6 +120,7 @@ function MenuScreen({ onStart }: MenuScreenProps) {
       margin: 0,
       lineHeight: 1,
       textTransform: "uppercase",
+      whiteSpace: "nowrap",
     },
     titleAccent: { color: "#ff4444" },
     startBtn: {
@@ -153,33 +154,37 @@ function MenuScreen({ onStart }: MenuScreenProps) {
   };
 
   return (
-    <div style={styles.menu}>
+    <div
+      style={{ ...styles.menu, cursor: "pointer" }}
+      onClick={() => onStart(1)}
+      onKeyDown={() => onStart(1)}
+      tabIndex={0}
+    >
       <style>{`
         @keyframes spinSlow { to { transform: rotate(360deg); } }
-        .start-btn-hover:hover {
-          background: rgba(255,68,68,0.15) !important;
-          border-color: rgba(255,68,68,0.8) !important;
-          transform: translateY(-4px);
-          box-shadow: 0 8px 24px rgba(255,68,68,0.3);
-        }
+        div:focus { outline: none; }
       `}</style>
       <div style={styles.bgGrid} />
       <div style={styles.bgLines} />
       <div style={styles.menuInner}>
         <div style={styles.logoWrap}>
           <div style={styles.logoIcon}>◎</div>
-          <h1 style={styles.title}>
-            TARGET<span style={styles.titleAccent}>GHOST</span>
-          </h1>
+          <h1 style={styles.title}>REACTION TIME TEST</h1>
+          <p
+            style={{
+              fontSize: 20,
+              color: "rgba(255, 255, 255, 0.6)",
+              letterSpacing: 1,
+              marginTop: 20,
+              textAlign: "center",
+              lineHeight: 1.6,
+            }}
+          >
+            When the target shows a red light, click it as quickly as possible.
+            <br />
+            Press any button to test.
+          </p>
         </div>
-        <button
-          className="start-btn-hover"
-          style={styles.startBtn}
-          onClick={() => onStart(1)}
-        >
-          <div style={styles.startText}>START GAME</div>
-          <div style={styles.startSubtext}>เริ่มเกม</div>
-        </button>
       </div>
     </div>
   );
@@ -300,33 +305,28 @@ function HUD({
       <style>{`
         @keyframes blink { 0%,100% { opacity:1; } 50% { opacity:0.2; } }
       `}</style>
-      <div style={s.hudLeft}>
-        <div style={s.hudBlock}>
-          <div style={s.hudLabel}>ด่าน</div>
-          <div style={{ ...s.hudValue, color: "#00ccff" }}>{level}</div>
-          <div style={s.hudSublabel}>{config.label}</div>
-        </div>
-        <div style={s.hudBlock}>
-          <div style={s.hudLabel}>คะแนน</div>
-          <div style={{ ...s.hudValue, color: "#fff" }}>
-            {score.toLocaleString()}
-          </div>
-        </div>
-      </div>
+      <div style={s.hudLeft}></div>
 
       <div style={s.hudCenter}>
-        {phase === "memorize" && (
-          <div style={{ ...s.phaseStatus, color: "#00ccff" }}>
-            <span style={{ ...s.statusDot, background: "#00ccff" }} />
-            จำตำแหน่ง
+        <div
+          style={{
+            display: "flex",
+            gap: 20,
+            paddingRight: 20,
+            alignItems: "center",
+          }}
+        >
+          <div style={s.hudBlock}>
+            <div style={s.hudLabel}>Level</div>
+            <div style={{ ...s.hudValue, color: "#00ccff" }}>{level}</div>
           </div>
-        )}
-        {phase === "blackout" && (
-          <div style={{ ...s.phaseStatus, color: "#ff4444" }}>
-            <span style={{ ...s.statusDot, background: "#ff4444" }} />
-            หน้าจอมืด!
+          <div style={s.hudBlock}>
+            <div style={s.hudLabel}>Score</div>
+            <div style={{ ...s.hudValue, color: "#fff" }}>
+              {score.toLocaleString()}
+            </div>
           </div>
-        )}
+        </div>
         {phase === "shooting" && (
           <div style={s.timerWrap}>
             <div style={s.timerBarBg}>
@@ -337,14 +337,7 @@ function HUD({
         )}
       </div>
 
-      <div style={s.hudRight}>
-        <div style={s.hudBlock}>
-          <div style={s.hudLabel}> </div>
-        </div>
-        <div style={s.hudBlock}>
-          <div style={s.hudLabel}> </div>
-        </div>
-      </div>
+      <div style={s.hudRight}></div>
     </div>
   );
 }
@@ -448,30 +441,32 @@ function GameOverScreen({
   return (
     <div style={s.wrap}>
       <style>{`
-        @keyframes bounce { to { transform: translateY(-8px); } }
-      `}</style>
+    @keyframes bounce { to { transform: translateY(-8px); } }
+  `}</style>
       <div style={s.bgGrid} />
       <div style={s.content}>
         <div style={s.bigIcon}>{cleared ? "🏆" : "💀"}</div>
-        <h1 style={s.title}>{cleared ? "ผ่านทุกด่านแล้ว!" : "GAME OVER"}</h1>
-        {cleared && <div style={s.clearedSub}>คุณเป็น นักแม่นปืน ตัวจริง!</div>}
+        <h1 style={s.title}>{cleared ? "All Stages Cleared!" : "GAME OVER"}</h1>
+        {cleared && (
+          <div style={s.clearedSub}>You are a true sharpshooter!</div>
+        )}
         <div style={s.stats}>
           <div style={s.stat}>
-            <span style={s.slabel}>ถึงด่าน</span>
+            <span style={s.slabel}>Reached Level</span>
             <span style={s.sval}>{currentLevel}</span>
           </div>
           <div style={s.stat}>
-            <span style={s.slabel}>คะแนนรวม</span>
+            <span style={s.slabel}>Total Score</span>
             <span style={{ ...s.sval, color: "#ffcc00" }}>
               {score.toLocaleString()}
             </span>
           </div>
           <div style={s.stat}>
-            <span style={s.slabel}>ยิงโดน</span>
+            <span style={s.slabel}>Hits</span>
             <span style={{ ...s.sval, color: "#00ff88" }}>{hitCount}</span>
           </div>
           <div style={s.stat}>
-            <span style={s.slabel}>ยิงพลาด</span>
+            <span style={s.slabel}>Misses</span>
             <span style={{ ...s.sval, color: "#ff5050" }}>{missCount}</span>
           </div>
         </div>
@@ -485,7 +480,7 @@ function GameOverScreen({
             }}
             onClick={onMenu}
           >
-            เมนูหลัก
+            Main Menu
           </button>
         </div>
       </div>
@@ -651,7 +646,7 @@ function ResultScreen({
       <div style={s.bgGrid} />
       <div style={s.inner}>
         <div style={s.badge}>
-          ด่าน {level} — {config.label}
+          Level {level} — {config.label}
         </div>
 
         <div style={s.ratingDisplay}>
@@ -678,29 +673,29 @@ function ResultScreen({
             {
               icon: "🎯",
               val: `${hitCount}/${totalTargets}`,
-              label: "เป้าที่โดน",
+              label: "Targets Hit",
             },
-            { icon: "📊", val: `${accuracy}%`, label: "ความแม่น" },
+            { icon: "📊", val: `${accuracy}%`, label: "Accuracy" },
             {
               icon: "⚡",
               val: avgReaction > 0 ? `${avgReaction}ms` : "—",
-              label: "ความเร็วเฉลี่ย",
+              label: "Avg Reaction",
             },
             {
               icon: "🏆",
               val: bestTime > 0 ? `${bestTime}ms` : "—",
-              label: "เร็วที่สุด",
+              label: "Fastest",
             },
             {
               icon: "✗",
               val: String(missCount),
-              label: "ยิงพลาด",
+              label: "Misses",
               color: "#ff5050",
             },
             {
               icon: "💫",
               val: score.toLocaleString(),
-              label: "คะแนน",
+              label: "Score",
               color: "#ffcc00",
               highlight: true,
             },
@@ -733,7 +728,7 @@ function ResultScreen({
 
         {shots.length > 0 && (
           <div style={s.timeline}>
-            <div style={s.timelineLabel}>บันทึกการยิง</div>
+            <div style={s.timelineLabel}>Shot Records</div>
             <div style={s.timelineRow}>
               {shots.map((shot: any, i: number) => (
                 <div
@@ -762,7 +757,7 @@ function ResultScreen({
               }}
               onClick={onNext}
             >
-              ด่านต่อไป →
+              Next Stage →
             </button>
           )}
           <button
@@ -774,7 +769,7 @@ function ResultScreen({
             }}
             onClick={onMenu}
           >
-            เมนูหลัก
+            Main Menu
           </button>
         </div>
       </div>
@@ -969,7 +964,7 @@ function GameCanvas(props: GameCanvasProps) {
             }}
           >
             <span style={{ fontSize: 24 }}>👁</span>
-            <span>จำตำแหน่งเป้าหมาย!</span>
+            <span className="uppercase">Remember the position!</span>
           </div>
         )}
 
@@ -1008,7 +1003,7 @@ function GameCanvas(props: GameCanvasProps) {
               >
                 ⚡
               </div>
-              <div>เตรียมพร้อม...</div>
+              <div>Get Ready...</div>
             </div>
           </div>
         )}
@@ -1199,7 +1194,7 @@ function GameCanvas(props: GameCanvasProps) {
                 animation: "blink 1s ease infinite",
               }}
             />
-            <span>รอสัญญาณ...</span>
+            <span>Waiting for signal...</span>
           </div>
         )}
       </div>

@@ -65,8 +65,6 @@ export function useGame(
   onGameComplete: (result: GameResult) => void,
 ) {
   const [state, setState] = useState<GameState>(initialState);
-
-  // ❌ เอา pendingResult ออก เพราะเราจะไม่ส่งข้อมูลแบบ Auto แล้ว
   const levelResultsRef = useRef<any[]>([]);
   const initialStartTimeRef = useRef<string>(new Date().toISOString());
   const signalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -268,7 +266,6 @@ export function useGame(
   const nextLevel = useCallback(() => {
     const nextLvl = stateRef.current.currentLevel + 1;
     if (nextLvl > LEVELS.length) {
-      // ✅ ลบการส่งข้อมูล Auto ออก ให้เกมเข้าสู่หน้า gameover ก่อนให้ผู้เล่นกดออกเอง
       setState((prev) => ({ ...prev, phase: "gameover", levelComplete: true }));
     } else {
       const currentLevelResult = {
@@ -293,14 +290,11 @@ export function useGame(
     setState({ ...initialState });
   }, [clearAllTimers]);
 
-  // ✅ เปลี่ยนจาก buildAndSendResult เป็นแค่ buildResult สำหรับปั้น Object คืนค่า
   const buildResult = useCallback(
     (finalState: GameState): GameResult => {
       const endedAt = new Date().toISOString();
       const durationMs =
         Date.now() - new Date(initialStartTimeRef.current).getTime();
-
-      // รวมข้อมูลของด่านปัจจุบันที่ค้างอยู่ (ในกรณีที่กดออกก่อนจบด่านทั้งหมด)
       const currentLevelResult = {
         level: finalState.currentLevel,
         shots: finalState.shots,

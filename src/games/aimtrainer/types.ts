@@ -67,6 +67,9 @@ export interface GameResult {
   rawData: any;
 }
 
+export const TARGET_SIZE_PX = 64;
+export const TARGET_HIT_RADIUS_PX = TARGET_SIZE_PX / 2;
+
 export const LEVELS: LevelConfig[] = [
   {
     level: 1,

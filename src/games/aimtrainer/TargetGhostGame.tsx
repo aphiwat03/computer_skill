@@ -46,11 +46,8 @@ interface ResultScreenProps {
   config: LevelConfig;
   shots: Shot[];
   hitCount: number;
-  missCount: number;
-  centerHitCount: number;
   avgReaction: number;
   avgSwitch: number;
-  score: number;
   isLastLevel: boolean;
   onNext: () => void;
   onMenu: () => void;
@@ -61,6 +58,43 @@ interface GameCanvasProps {
   sessionId: string;
   onGameComplete: (result: GameResult) => void;
 }
+
+const playBeep = (isHit: boolean) => {
+  const AudioContext =
+    window.AudioContext || (window as any).webkitAudioContext;
+  if (!AudioContext) return;
+
+  const audioCtx = new AudioContext();
+  const oscillator = audioCtx.createOscillator();
+  const gainNode = audioCtx.createGain();
+
+  oscillator.connect(gainNode);
+  gainNode.connect(audioCtx.destination);
+
+  if (isHit) {
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(880, audioCtx.currentTime);
+    gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(
+      0.01,
+      audioCtx.currentTime + 0.1,
+    );
+
+    oscillator.start(audioCtx.currentTime);
+    oscillator.stop(audioCtx.currentTime + 0.1);
+  } else {
+    oscillator.type = "sawtooth";
+    oscillator.frequency.setValueAtTime(150, audioCtx.currentTime);
+    gainNode.gain.setValueAtTime(0.05, audioCtx.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(
+      0.01,
+      audioCtx.currentTime + 0.2,
+    );
+
+    oscillator.start(audioCtx.currentTime);
+    oscillator.stop(audioCtx.currentTime + 0.2);
+  }
+};
 
 // ==================== MenuScreen Component ====================
 
@@ -193,7 +227,7 @@ function MenuScreen({ onStart }: MenuScreenProps) {
 
 // ==================== HUD Component ====================
 
-function HUD({ phase, level, score, timeLeft, totalTime }: HUDProps) {
+function HUD({ phase, level, timeLeft, totalTime }: HUDProps) {
   const pct = totalTime > 0 ? (timeLeft / totalTime) * 100 : 100;
   const timeColor = pct > 50 ? "#00ffaa" : pct > 25 ? "#ffaa00" : "#ff4444";
   const secs = (timeLeft / 1000).toFixed(1);
@@ -208,13 +242,6 @@ function HUD({ phase, level, score, timeLeft, totalTime }: HUDProps) {
       borderBottom: "1px solid rgba(0,255,170,0.08)",
       position: "relative",
       zIndex: 10,
-    },
-    hudLeft: { display: "flex", gap: 20, minWidth: 200 },
-    hudRight: {
-      display: "flex",
-      gap: 20,
-      minWidth: 200,
-      justifyContent: "flex-end",
     },
     hudCenter: {
       flex: 1,
@@ -297,7 +324,6 @@ function HUD({ phase, level, score, timeLeft, totalTime }: HUDProps) {
       <style>{`
         @keyframes blink { 0%,100% { opacity:1; } 50% { opacity:0.2; } }
       `}</style>
-      <div style={s.hudLeft}></div>
 
       <div style={s.hudCenter}>
         <div
@@ -312,12 +338,6 @@ function HUD({ phase, level, score, timeLeft, totalTime }: HUDProps) {
             <div style={s.hudLabel}>Level</div>
             <div style={{ ...s.hudValue, color: "#00ccff" }}>{level}</div>
           </div>
-          <div style={s.hudBlock}>
-            <div style={s.hudLabel}>Score</div>
-            <div style={{ ...s.hudValue, color: "#fff" }}>
-              {score.toLocaleString()}
-            </div>
-          </div>
         </div>
         {phase === "shooting" && (
           <div style={s.timerWrap}>
@@ -328,8 +348,6 @@ function HUD({ phase, level, score, timeLeft, totalTime }: HUDProps) {
           </div>
         )}
       </div>
-
-      <div style={s.hudRight}></div>
     </div>
   );
 }
@@ -495,42 +513,25 @@ function GameOverScreen({
 }
 
 // ==================== ResultScreen Component ====================
-function getRating(hitCount: number, total: number, avgReaction: number) {
-  const accuracy = total > 0 ? hitCount / total : 0;
-  if (accuracy === 1 && avgReaction < 400)
-    return { stars: 3, label: "PERFECT" };
-  if (accuracy >= 0.8 && avgReaction < 700)
-    return { stars: 2, label: "EXCELLENT" };
-  if (accuracy >= 0.5) return { stars: 1, label: "GOOD" };
-  return { stars: 0, label: "TRY AGAIN" };
-}
-
 function ResultScreen({
   level,
   config,
   shots,
   hitCount,
-  missCount,
-  centerHitCount,
   avgReaction,
   avgSwitch,
-  score,
   isLastLevel,
   onNext,
   onMenu,
 }: ResultScreenProps) {
   const totalTargets = config.targetCount;
-  const rating = getRating(hitCount, totalTargets, avgReaction);
   const accuracy =
-    totalTargets > 0 ? Math.round((hitCount / totalTargets) * 100) : 0;
+    shots.length > 0 ? Math.round((hitCount / shots.length) * 100) : 0;
   const hitShots = shots.filter((s) => s.hit);
   const bestTime =
     hitShots.length > 0
       ? Math.min(...hitShots.map((s) => s.reactionTime || 9999))
       : 0;
-
-  const ratingColors = ["#ff5050", "#00ccff", "#00ffaa", "#ffcc00"];
-  const ratingColor = ratingColors[rating.stars];
 
   const s: Record<string, CSSProperties> = {
     wrap: {
@@ -557,90 +558,69 @@ function ResultScreen({
       display: "flex",
       flexDirection: "column",
       alignItems: "center",
-      gap: 28,
+      gap: 32, // เพิ่มช่องว่างให้ดูโปร่งขึ้น
       padding: "40px 20px",
-      maxWidth: 760,
+      maxWidth: 700,
       width: "100%",
     },
     badge: {
       color: "rgba(255,255,255,0.4)",
-      fontSize: 13,
-      letterSpacing: 3,
+      fontSize: 14,
+      letterSpacing: 4,
       textTransform: "uppercase",
       border: "1px solid rgba(255,255,255,0.1)",
-      padding: "5px 16px",
+      padding: "8px 20px",
       borderRadius: 2,
     },
-    ratingDisplay: {
+    title: {
+      fontSize: 32,
+      fontWeight: 900,
+      letterSpacing: 6,
+      textTransform: "uppercase",
+      color: "#fff",
+      margin: 0,
+    },
+    statsGrid: {
+      display: "grid",
+      gridTemplateColumns: "repeat(2, 1fr)", // จัดเป็น 2 คอลัมน์ให้ดูสมมาตรและอ่านง่าย
+      gap: 16,
+      width: "100%",
+    },
+    statCard: {
+      background: "rgba(255,255,255,0.02)",
+      border: "1px solid rgba(255,255,255,0.08)",
+      borderRadius: 4,
+      padding: "24px 16px", // เพิ่ม padding ให้การ์ดดูใหญ่ขึ้น
       display: "flex",
       flexDirection: "column",
       alignItems: "center",
       gap: 8,
     },
-    stars: { display: "flex", gap: 8 },
-    ratingLabel: {
-      fontSize: 28,
-      fontWeight: 900,
-      letterSpacing: 6,
-      textTransform: "uppercase",
-      color: ratingColor,
-    },
-    statsGrid: {
-      display: "grid",
-      gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-      gap: 10,
-      width: "100%",
-    },
-    statCard: {
-      background: "rgba(255,255,255,0.03)",
-      border: "1px solid rgba(255,255,255,0.07)",
-      borderRadius: 4,
-      padding: 16,
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "center",
-      gap: 6,
-    },
     statVal: {
-      fontSize: 26,
+      fontSize: 36, // ขยายขนาดตัวเลข
       fontWeight: 900,
-      color: "#fff",
       fontFamily: '"Rajdhani", monospace',
-      letterSpacing: 1,
+      letterSpacing: 2,
     },
     statLabel: {
-      fontSize: 11,
-      color: "rgba(255,255,255,0.35)",
-      letterSpacing: 2,
+      fontSize: 12,
+      color: "rgba(255,255,255,0.4)",
+      letterSpacing: 3,
       textTransform: "uppercase",
     },
-    timeline: {
-      width: "100%",
-      background: "rgba(255,255,255,0.02)",
-      border: "1px solid rgba(255,255,255,0.06)",
-      borderRadius: 4,
-      padding: "14px 16px",
-    },
-    timelineLabel: {
-      fontSize: 11,
-      letterSpacing: 2,
-      textTransform: "uppercase",
-      color: "rgba(255,255,255,0.3)",
-      marginBottom: 10,
-    },
-    timelineRow: { display: "flex", flexWrap: "wrap", gap: 6 },
     actions: {
       display: "flex",
-      gap: 12,
+      gap: 16,
       flexWrap: "wrap",
       justifyContent: "center",
+      marginTop: 20,
     },
     btn: {
-      padding: "12px 28px",
+      padding: "14px 36px",
       fontFamily: '"Rajdhani", "Sarabun", sans-serif',
       fontSize: 15,
       fontWeight: 700,
-      letterSpacing: 2,
+      letterSpacing: 3,
       textTransform: "uppercase",
       borderRadius: 3,
       cursor: "pointer",
@@ -653,69 +633,35 @@ function ResultScreen({
     <div style={s.wrap}>
       <div style={s.bgGrid} />
       <div style={s.inner}>
-        <div style={s.badge}>
-          Level {level} — {config.label}
-        </div>
+        <div style={s.badge}>LEVEL {level} — TRAINING</div>
 
-        <div style={s.ratingDisplay}>
-          <div style={s.stars}>
-            {[0, 1, 2].map((i) => (
-              <span
-                key={i}
-                style={{
-                  fontSize: 40,
-                  color: i < rating.stars ? "#ffcc00" : "rgba(255,255,255,0.1)",
-                  textShadow:
-                    i < rating.stars ? "0 0 20px rgba(255,204,0,0.6)" : "none",
-                }}
-              >
-                ★
-              </span>
-            ))}
-          </div>
-          <div style={s.ratingLabel}>{rating.label}</div>
-        </div>
+        {/* แทนที่ระบบเรตติ้งด้วยหัวข้อเรียบๆ */}
+        <h2 style={s.title}>PERFORMANCE METRICS</h2>
 
         <div style={s.statsGrid}>
           {[
             {
-              icon: "🎯",
-              val: `${hitCount}/${totalTargets}`,
-              label: "Targets Hit",
-            },
-            { icon: "📊", val: `${accuracy}%`, label: "Accuracy" },
-            {
-              icon: "💫",
-              val: score.toLocaleString(),
-              label: "Score",
+              icon: "📊",
+              val: `${accuracy}%`,
+              label: "ACCURACY",
               color: "#fff",
+            },
+            {
+              icon: "🔁",
+              val: avgSwitch > 0 ? `${avgSwitch}ms` : "—",
+              label: "AVG SWITCH (FLICK)",
+              color: "#00ccff",
             },
             {
               icon: "🏆",
               val: bestTime > 0 ? `${bestTime}ms` : "—",
-              label: "Fastest",
-            },
-            {
-              icon: "🔁",
-              val: avgSwitch > 0 ? `${avgSwitch}ms` : "-",
-              label: "Avg Switch",
-            },
-            {
-              icon: "🎯",
-              val: String(centerHitCount),
-              label: "Center Hits",
-              color: "#00ccff",
-            },
-            {
-              icon: "❌️",
-              val: String(missCount),
-              label: "Misses",
-              color: "#ff5050",
+              label: "FASTEST REACTION",
+              color: "#00ffaa",
             },
             {
               icon: "⚡",
               val: avgReaction > 0 ? `${avgReaction}ms` : "—",
-              label: "Avg Reaction",
+              label: "AVG REACTION",
               color: "#ffcc00",
               highlight: true,
             },
@@ -724,47 +670,20 @@ function ResultScreen({
               key={i}
               style={{
                 ...s.statCard,
-                order:
-                  item.label === "Targets Hit"
-                    ? 1
-                    : item.label === "Accuracy"
-                      ? 2
-                      : item.label === "Center Hits"
-                        ? 3
-                        : item.label === "Misses"
-                          ? 4
-                          : item.label === "Score"
-                            ? 5
-                            : item.label === "Fastest"
-                              ? 6
-                              : item.label === "Avg Switch"
-                                ? 7
-                                : item.label === "Avg Reaction"
-                                  ? 99
-                                  : 50,
                 ...(item.highlight
                   ? {
                       background: "rgba(255,204,0,0.05)",
-                      border: "1px solid rgba(255,204,0,0.2)",
-                    }
-                  : {}),
-                ...(item.fullWidth
-                  ? {
-                      gridColumn: "1 / -1",
-                      minHeight: 120,
-                      justifyContent: "center",
+                      border: "1px solid rgba(255,204,0,0.3)",
+                      boxShadow: "0 0 20px rgba(255,204,0,0.1)",
                     }
                   : {}),
               }}
             >
-              <div style={{ fontSize: item.fullWidth ? 24 : 20 }}>
-                {item.icon}
-              </div>
+              <div style={{ fontSize: 24, marginBottom: 4 }}>{item.icon}</div>
               <div
                 style={{
                   ...s.statVal,
-                  ...(item.fullWidth ? { fontSize: 44 } : {}),
-                  ...(item.color ? { color: item.color } : {}),
+                  ...(item.color ? { color: item.color } : { color: "#fff" }),
                 }}
               >
                 {item.val}
@@ -774,28 +693,8 @@ function ResultScreen({
           ))}
         </div>
 
-        {shots.length > 0 && (
-          <div style={s.timeline}>
-            <div style={s.timelineLabel}>Shot Records</div>
-            <div style={s.timelineRow}>
-              {shots.map((shot: any, i: number) => (
-                <div
-                  key={i}
-                  style={{
-                    fontSize: 14,
-                    cursor: "default",
-                    color: shot.hit ? "#00ff88" : "rgba(255,80,80,0.5)",
-                  }}
-                >
-                  {shot.hit ? "●" : "○"}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         <div style={s.actions}>
-          {rating.stars > 0 && !isLastLevel && (
+          {!isLastLevel && (
             <button
               style={{
                 ...s.btn,
@@ -805,7 +704,7 @@ function ResultScreen({
               }}
               onClick={onNext}
             >
-              Next Stage →
+              NEXT STAGE →
             </button>
           )}
           <button
@@ -817,7 +716,7 @@ function ResultScreen({
             }}
             onClick={onMenu}
           >
-            Main Menu
+            MAIN MENU
           </button>
         </div>
       </div>
@@ -848,24 +747,36 @@ function GameCanvas(props: GameCanvasProps) {
       if (!rect) return;
       const x = ((e.clientX - rect.left) / rect.width) * 100;
       const y = ((e.clientY - rect.top) / rect.height) * 100;
-
+      const clickPxX = e.clientX - rect.left;
+      const clickPxY = e.clientY - rect.top;
       const id = ++effectIdRef.current;
-      const activeTarget = state.targets.find(
-        (t) => t.id === state.activeTargetId && t.isActive,
-      );
+
+      const clickedTarget = state.targets.find((t) => {
+        const targetPxX = (t.x / 100) * rect.width;
+        const targetPxY = (t.y / 100) * rect.height;
+
+        const dx = targetPxX - clickPxX;
+        const dy = targetPxY - clickPxY;
+        return Math.sqrt(dx * dx + dy * dy) <= 32;
+      });
+
       let hit = false;
-      if (activeTarget) {
-        const dx = activeTarget.x - x;
-        const dy = activeTarget.y - y;
-        hit = Math.sqrt(dx * dx + dy * dy) < 9;
+      if (clickedTarget && clickedTarget.id === state.activeTargetId) {
+        hit = true;
       }
 
+      playBeep(hit);
       setShotEffects((prev) => [...prev, { id, x, y, hit }]);
       setTimeout(
         () => setShotEffects((prev) => prev.filter((e) => e.id !== id)),
         600,
       );
-      handleShoot(x, y);
+
+      const arenaSize = {
+        width: rect.width,
+        height: rect.height,
+      };
+      handleShoot(x, y, arenaSize);
     },
     [state.phase, state.targets, state.activeTargetId, handleShoot],
   );
@@ -923,11 +834,8 @@ function GameCanvas(props: GameCanvasProps) {
         config={config}
         shots={state.shots}
         hitCount={state.hitCount}
-        missCount={state.missCount}
-        centerHitCount={state.centerHitCount}
         avgReaction={avgReaction}
         avgSwitch={avgSwitch}
-        score={state.score}
         isLastLevel={isLastLevel}
         onNext={nextLevel}
         onMenu={isLastLevel ? submitAndExit : goToMenu}

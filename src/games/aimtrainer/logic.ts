@@ -6,17 +6,22 @@ import type {
   LevelConfig,
   GameResult,
 } from "../aimtrainer/types";
-import { LEVELS } from "../aimtrainer/types";
+import { LEVELS, TARGET_HIT_RADIUS_PX } from "../aimtrainer/types";
 
 const INITIAL_SIGNAL_DELAY_MS = 3000;
-const HIT_RADIUS = 9;
-const CENTER_HIT_RADIUS = HIT_RADIUS * 0.3;
+const HIT_RADIUS_PX = TARGET_HIT_RADIUS_PX;
+const CENTER_HIT_RADIUS_PX = HIT_RADIUS_PX * 0.3;
 const EARLY_CLICK_PENALTY = 150;
 const MISS_PENALTY = 50;
 
 function getAimScore(distanceFromCenter: number) {
-  const precision = Math.max(0, 1 - distanceFromCenter / HIT_RADIUS);
+  const precision = Math.max(0, 1 - distanceFromCenter / HIT_RADIUS_PX);
   return Math.round(precision * 150);
+}
+
+interface ArenaSize {
+  width: number;
+  height: number;
 }
 
 function getAverage(values: number[]) {
@@ -226,7 +231,7 @@ export function useGame(
   );
 
   const handleShoot = useCallback(
-    (x: number, y: number) => {
+    (x: number, y: number, arenaSize: ArenaSize) => {
       setState((prev) => {
         if (prev.phase !== "shooting") return prev;
         const config = getLevelConfig(prev.currentLevel);
@@ -240,10 +245,10 @@ export function useGame(
         let distanceFromCenter: number | undefined;
 
         if (activeTarget) {
-          const dx = activeTarget.x - x;
-          const dy = activeTarget.y - y;
+          const dx = ((activeTarget.x - x) / 100) * arenaSize.width;
+          const dy = ((activeTarget.y - y) / 100) * arenaSize.height;
           distanceFromCenter = Math.sqrt(dx * dx + dy * dy);
-          if (distanceFromCenter < HIT_RADIUS) {
+          if (distanceFromCenter <= HIT_RADIUS_PX) {
             hit = true;
             hitTargetId = activeTarget.id;
           }
@@ -256,7 +261,7 @@ export function useGame(
         const switchTime = hit && prev.lastHitAt ? now - prev.lastHitAt : undefined;
         const isCenterHit =
           hit && distanceFromCenter !== undefined
-            ? distanceFromCenter <= CENTER_HIT_RADIUS
+            ? distanceFromCenter <= CENTER_HIT_RADIUS_PX
             : false;
         const accuracyScore =
           hit && distanceFromCenter !== undefined

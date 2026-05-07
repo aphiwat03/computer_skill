@@ -17,8 +17,8 @@ interface SpatialMemoryGameProps {
   totalRounds?: number;
   playerId?: string;
   sessionId?: string;
-  onGameComplete?: (result: any) => void; // GameResult
-  onComplete?: (results: AttemptResult[]) => void; // Legacy
+  onGameComplete?: (result: any) => void;
+  onComplete?: (results: AttemptResult[]) => void;
 }
 
 // ─── Reducer ──────────────────────────────────────────────────────────────────
@@ -442,22 +442,24 @@ export default function SpatialMemoryGame({
     <div style={styles.root}>
       <div style={styles.bgGrid} />
       {/* Header */}
-      <div style={styles.header}>
-        <div style={styles.headerLeft}>
-          <span style={styles.gameTitle}>SPATIAL MEMORY</span>
-          <span style={styles.diffBadge}>{difficulty.toUpperCase()}</span>
+      {state.phase !== "idle" && (
+        <div style={styles.header}>
+          <div style={styles.headerLeft}>
+            <span style={styles.gameTitle}>SPATIAL MEMORY</span>
+            <span style={styles.diffBadge}>{difficulty.toUpperCase()}</span>
+          </div>
+          <div style={styles.headerRight}>
+            <span style={styles.roundLabel}>ROUND</span>
+            <span style={styles.roundNum}>
+              {state.round}/{state.totalRounds}
+            </span>
+            <span style={styles.scoreLabel}>SCORE</span>
+            <span style={styles.scoreNum}>
+              {accumulatedScore.toLocaleString()}
+            </span>
+          </div>
         </div>
-        <div style={styles.headerRight}>
-          <span style={styles.roundLabel}>ROUND</span>
-          <span style={styles.roundNum}>
-            {state.round}/{state.totalRounds}
-          </span>
-          <span style={styles.scoreLabel}>SCORE</span>
-          <span style={styles.scoreNum}>
-            {accumulatedScore.toLocaleString()}
-          </span>
-        </div>
-      </div>
+      )}
 
       {/* Canvas area */}
       <div style={styles.canvasWrapper}>
@@ -485,10 +487,9 @@ export default function SpatialMemoryGame({
                 <br />
                 จากนั้นนำเคอร์เซอร์ไปยังเป้าหมาย
                 <br />
-                <strong>ขณะที่หน้าจอขาวโพลน</strong>
               </p>
               <button style={styles.btnPrimary} onClick={startRound}>
-                {state.round === 0 ? "เริ่มเกม" : "รอบถัดไป"}
+                {state.round === 0 ? "Start" : "Next Round"}
               </button>
             </div>
           </div>

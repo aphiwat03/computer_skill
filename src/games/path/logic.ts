@@ -69,7 +69,6 @@ function generateObstacles(
   const maxAttempts = 200;
 
   for (let i = 0; i < obstacleCount; i++) {
-    let placed = false;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       const w = minDim + Math.random() * (maxDim - minDim);
       const h = minDim + Math.random() * (maxDim - minDim);
@@ -88,7 +87,6 @@ function generateObstacles(
       if (obstacles.some((o) => rectsOverlap({ x, y, width: w, height: h }, o, 10))) continue;
 
       obstacles.push({ id: `obs-${i}`, x, y, width: w, height: h });
-      placed = true;
       break;
     }
   }

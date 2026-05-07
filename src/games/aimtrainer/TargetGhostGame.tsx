@@ -515,7 +515,6 @@ function GameOverScreen({
 // ==================== ResultScreen Component ====================
 function ResultScreen({
   level,
-  config,
   shots,
   hitCount,
   avgReaction,
@@ -524,7 +523,6 @@ function ResultScreen({
   onNext,
   onMenu,
 }: ResultScreenProps) {
-  const totalTargets = config.targetCount;
   const accuracy =
     shots.length > 0 ? Math.round((hitCount / shots.length) * 100) : 0;
   const hitShots = shots.filter((s) => s.hit);
@@ -734,7 +732,6 @@ function GameCanvas(props: GameCanvasProps) {
     handleShoot,
     nextLevel,
     submitAndExit,
-    goToMenu,
   } = useGame(props.playerId, props.sessionId, props.onGameComplete);
   const arenaRef = useRef<HTMLDivElement>(null);
   const [shotEffects, setShotEffects] = useState<ShotEffect[]>([]);
@@ -838,7 +835,7 @@ function GameCanvas(props: GameCanvasProps) {
         avgSwitch={avgSwitch}
         isLastLevel={isLastLevel}
         onNext={nextLevel}
-        onMenu={isLastLevel ? submitAndExit : goToMenu}
+        onMenu={submitAndExit}
       />
     );
   }

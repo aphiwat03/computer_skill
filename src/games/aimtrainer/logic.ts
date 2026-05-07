@@ -1,12 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import type {
-  GameState,
-  Target,
-  Shot,
-  LevelConfig,
-  GameResult,
-} from "../aimtrainer/types";
-import { LEVELS, TARGET_HIT_RADIUS_PX } from "../aimtrainer/types";
+import type { GameState, Target, Shot, LevelConfig, GameResult } from "./types";
+import { LEVELS, TARGET_HIT_RADIUS_PX } from "./types";
 
 const INITIAL_SIGNAL_DELAY_MS = 3000;
 const HIT_RADIUS_PX = TARGET_HIT_RADIUS_PX;
@@ -255,10 +249,12 @@ export function useGame(
         }
 
         const isEarlyClick = !activeTarget;
-        const reactionTime = activeTarget && prev.currentReactionStart
-          ? now - prev.currentReactionStart
-          : undefined;
-        const switchTime = hit && prev.lastHitAt ? now - prev.lastHitAt : undefined;
+        const reactionTime =
+          activeTarget && prev.currentReactionStart
+            ? now - prev.currentReactionStart
+            : undefined;
+        const switchTime =
+          hit && prev.lastHitAt ? now - prev.lastHitAt : undefined;
         const isCenterHit =
           hit && distanceFromCenter !== undefined
             ? distanceFromCenter <= CENTER_HIT_RADIUS_PX
@@ -421,7 +417,7 @@ export function useGame(
       const consistencyMs = Math.round(getStandardDeviation(reactionTimes));
 
       return {
-        gameId: "aimtrainer", // ✅ ตั้งชื่อให้ตรงกับหน้า GameSelector
+        gameId: "target-ghost",
         gameName: "Target Ghost",
         playerId,
         sessionId,

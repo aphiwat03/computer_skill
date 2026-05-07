@@ -1,4 +1,11 @@
-import { useRef, useEffect, useCallback, useState, useReducer } from "react";
+import {
+  useRef,
+  useEffect,
+  useLayoutEffect,
+  useCallback,
+  useState,
+  useReducer,
+} from "react";
 import type { GameState, GameConfig, Point, AttemptResult } from "./types";
 import {
   generateLevel,
@@ -116,6 +123,8 @@ const COLORS = {
   trailGlow: "rgba(0,207,255,0.4)",
   collision: "#ff3d3d",
 };
+
+const MAX_CANVAS_PIXEL_RATIO = 3;
 
 function drawGame(
   ctx: CanvasRenderingContext2D,
@@ -312,19 +321,53 @@ export default function SpatialMemoryGame({
 }: SpatialMemoryGameProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [state, dispatch] = useReducer(reducer, totalRounds, initState);
-  const [countdown, setCountdown] = useState(3);
+  const [countdown] = useState(3);
   const [memorizeProgress, setMemorizeProgress] = useState(100);
   const [collisionFlash, setCollisionFlash] = useState(false);
+  const [canvasRenderVersion, setCanvasRenderVersion] = useState(0);
   const configRef = useRef<GameConfig>(
     createDefaultConfig(700, 450, difficulty),
   );
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const animRef = useRef<number>(0);
   const stateRef = useRef(state);
   const gameStartTimeRef = useRef<number>(Date.now());
   stateRef.current = state;
 
   const config = configRef.current;
+
+  useLayoutEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const syncCanvasResolution = () => {
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
+
+      const pixelRatio = Math.min(
+        window.devicePixelRatio || 1,
+        MAX_CANVAS_PIXEL_RATIO,
+      );
+      const nextWidth = Math.round(rect.width * pixelRatio);
+      const nextHeight = Math.round(rect.height * pixelRatio);
+
+      if (canvas.width !== nextWidth || canvas.height !== nextHeight) {
+        canvas.width = nextWidth;
+        canvas.height = nextHeight;
+        setCanvasRenderVersion((version) => version + 1);
+      }
+    };
+
+    syncCanvasResolution();
+
+    const resizeObserver = new ResizeObserver(syncCanvasResolution);
+    resizeObserver.observe(canvas);
+    window.addEventListener("resize", syncCanvasResolution);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", syncCanvasResolution);
+    };
+  }, []);
 
   // Render loop
   useEffect(() => {
@@ -334,8 +377,17 @@ export default function SpatialMemoryGame({
     if (!ctx) return;
 
     const isBlind = state.phase === "navigate";
+    ctx.setTransform(
+      canvas.width / config.canvasWidth,
+      0,
+      0,
+      canvas.height / config.canvasHeight,
+      0,
+      0,
+    );
     drawGame(ctx, state, config, isBlind, collisionFlash);
-  }, [state, config, collisionFlash]);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }, [state, config, collisionFlash, canvasRenderVersion]);
 
   // Phase machine
   const startRound = useCallback(() => {
@@ -762,10 +814,13 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   canvasWrapper: {
-    flex: 1,
+    flex: "0 1 auto",
     position: "relative",
-    margin: "0 16px 16px",
-    width: "auto",
+    margin: "0 auto 16px",
+    width: "min(calc(100vw - 32px), calc((100vh - 96px) * 1.5556))",
+    maxWidth: "calc(100vw - 32px)",
+    maxHeight: "calc(100vh - 96px)",
+    aspectRatio: "700 / 450",
     minHeight: 0,
     borderRadius: 4,
     overflow: "hidden",

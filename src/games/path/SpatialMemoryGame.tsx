@@ -15,6 +15,7 @@ import {
   calculateBreakdown,
   getRating,
   checkCollision,
+  getDynamicObstacles,
 } from "./logic";
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -313,7 +314,7 @@ function roundRect(
 
 export default function SpatialMemoryGame({
   difficulty = "medium",
-  totalRounds = 3,
+  totalRounds = 5,
   playerId = "player",
   sessionId = "session",
   onGameComplete,
@@ -323,7 +324,7 @@ export default function SpatialMemoryGame({
   const [state, dispatch] = useReducer(reducer, totalRounds, initState);
   const [countdown] = useState(3);
   const [memorizeProgress, setMemorizeProgress] = useState(100);
-  const [collisionFlash, setCollisionFlash] = useState(false);
+  const collisionFlashRef = useRef(false);
   const [canvasRenderVersion, setCanvasRenderVersion] = useState(0);
   const configRef = useRef<GameConfig>(
     createDefaultConfig(700, 450, difficulty),
@@ -369,29 +370,54 @@ export default function SpatialMemoryGame({
     };
   }, []);
 
-  // Render loop
+  // ─── Render Loop (Animation) ────────────────────────────────────────────────
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const isBlind = state.phase === "navigate";
-    ctx.setTransform(
-      canvas.width / config.canvasWidth,
-      0,
-      0,
-      canvas.height / config.canvasHeight,
-      0,
-      0,
-    );
-    drawGame(ctx, state, config, isBlind, collisionFlash);
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-  }, [state, config, collisionFlash, canvasRenderVersion]);
+    let animationId: number;
+
+    const renderLoop = () => {
+      const s = stateRef.current;
+      const isBlind = s.phase === "navigate";
+
+      // หาเวลาเพื่อใช้อัปเดตตำแหน่งสิ่งกีดขวางแบบไหลลื่น
+      let timeForObstacles = Date.now();
+      if (s.phase === "result" && s.result && s.startTime) {
+        timeForObstacles = s.startTime + s.result.timeTaken;
+      }
+
+      const currentObstacles = getDynamicObstacles(
+        s.obstacles,
+        timeForObstacles,
+      );
+      const drawState = { ...s, obstacles: currentObstacles };
+
+      ctx.save();
+      ctx.setTransform(
+        canvas.width / config.canvasWidth,
+        0,
+        0,
+        canvas.height / config.canvasHeight,
+        0,
+        0,
+      );
+      drawGame(ctx, drawState, config, isBlind, collisionFlashRef.current);
+      ctx.restore();
+
+      animationId = requestAnimationFrame(renderLoop);
+    };
+
+    animationId = requestAnimationFrame(renderLoop);
+    return () => cancelAnimationFrame(animationId);
+  }, [config, canvasRenderVersion]);
 
   // Phase machine
   const startRound = useCallback(() => {
-    const level = generateLevel(config);
+    // ส่ง state.round + 1 ไปเพื่อให้ระบบรู้ว่าเป็นด่านอะไร
+    const level = generateLevel(config, state.round + 1);
     dispatch({ type: "START_MEMORIZE", payload: level });
 
     let elapsed = 0;
@@ -404,20 +430,10 @@ export default function SpatialMemoryGame({
       if (elapsed >= config.memorizeTime) {
         clearInterval(timer);
         dispatch({ type: "START_NAVIGATE" });
-        // let c = 3;
-        // setCountdown(c);
-        // const cd = setInterval(() => {
-        //   c--;
-        //   setCountdown(c);
-        //   if (c <= 0) {
-        //     clearInterval(cd);
-        //     dispatch({ type: 'START_NAVIGATE' });
-        //   }
-        // }, 1000);
       }
     }, interval);
     timerRef.current = timer as unknown as ReturnType<typeof setTimeout>;
-  }, [config]);
+  }, [config, state.round]);
 
   // Mouse handlers
   const getCanvasPoint = useCallback(
@@ -429,6 +445,7 @@ export default function SpatialMemoryGame({
       return {
         x: (e.clientX - rect.left) * scaleX,
         y: (e.clientY - rect.top) * scaleY,
+        timeMs: Date.now(), // เก็บ Timestamp ไว้ตรวจสอบการชนกับสิ่งกีดขวางที่ขยับ
       };
     },
     [config],
@@ -449,11 +466,17 @@ export default function SpatialMemoryGame({
       if (s.phase !== "navigate" || !s.isMouseDown) return;
       const pt = getCanvasPoint(e);
 
-      // Real-time collision check for immediate feedback
-      const col = checkCollision(pt, s.obstacles, config);
+      // Real-time collision check (ดึงตำแหน่งสิ่งกีดขวางแบบเป๊ะๆ ของเสี้ยววินาทีนี้)
+      const currentObs = getDynamicObstacles(
+        s.obstacles,
+        pt.timeMs || Date.now(),
+      );
+      const col = checkCollision(pt, currentObs, config);
       if (col !== "none") {
-        setCollisionFlash(true);
-        setTimeout(() => setCollisionFlash(false), 200);
+        collisionFlashRef.current = true;
+        setTimeout(() => {
+          collisionFlashRef.current = false;
+        }, 200);
       }
 
       dispatch({ type: "MOUSE_MOVE", payload: pt });
@@ -492,7 +515,9 @@ export default function SpatialMemoryGame({
 
   return (
     <div style={styles.root}>
-      <div style={styles.bgGrid} />
+      {/* ซ่อน Grid ในหน้าแรก (Idle) */}
+      {state.phase !== "idle" && <div style={styles.bgGrid} />}
+
       {/* Header */}
       {state.phase !== "idle" && (
         <div style={styles.header}>
@@ -514,12 +539,25 @@ export default function SpatialMemoryGame({
       )}
 
       {/* Canvas area */}
-      <div style={styles.canvasWrapper}>
+      <div
+        style={{
+          ...styles.canvasWrapper,
+          // เอาขอบสีเขียวและพื้นหลังเทาออกเมื่ออยู่หน้าแรก (Idle Phase)
+          border:
+            state.phase === "idle" ? "none" : "1px solid rgba(0,255,170,0.16)",
+          background:
+            state.phase === "idle" ? "transparent" : "rgba(0,0,0,0.4)",
+        }}
+      >
         <canvas
           ref={canvasRef}
           width={config.canvasWidth}
           height={config.canvasHeight}
-          style={styles.canvas}
+          style={{
+            ...styles.canvas,
+            // ซ่อนตัว Canvas ชั่วคราวเมื่อยังไม่เริ่มเกม
+            visibility: state.phase === "idle" ? "hidden" : "visible",
+          }}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
@@ -539,6 +577,7 @@ export default function SpatialMemoryGame({
                 <br />
                 จากนั้นนำเคอร์เซอร์ไปยังเป้าหมาย
                 <br />
+                (ด่านที่ 4 และ 5 สิ่งกีดขวางจะมีการเคลื่อนไหว)
               </p>
               <button style={styles.btnPrimary} onClick={startRound}>
                 {state.round === 0 ? "Start" : "Next Round"}
@@ -661,7 +700,6 @@ export default function SpatialMemoryGame({
                       },
                     };
 
-                    // ส่งผลลัพธ์กลับไปให้ระบบหลัก
                     if (onGameComplete) onGameComplete(gameResult);
                     if (onComplete) onComplete(allResults);
                   } else {
@@ -817,15 +855,13 @@ const styles: Record<string, React.CSSProperties> = {
     flex: "0 1 auto",
     position: "relative",
     margin: "0 auto 16px",
-    width: "min(calc(100vw - 32px), calc((100vh - 96px) * 1.5556))",
-    maxWidth: "calc(100vw - 32px)",
-    maxHeight: "calc(100vh - 96px)",
+    // ปรับ maxWidth ให้เล็กลงเพื่อให้หน้าจอเกมซูมออก
+    width: "min(calc(100vw - 32px), 800px)",
+    maxHeight: "calc(100vh - 120px)",
     aspectRatio: "700 / 450",
     minHeight: 0,
     borderRadius: 4,
     overflow: "hidden",
-    border: "1px solid rgba(0,255,170,0.16)",
-    background: "rgba(0,0,0,0.4)",
     boxSizing: "border-box",
     transition: "border-color 0.3s",
     zIndex: 1,
@@ -834,18 +870,19 @@ const styles: Record<string, React.CSSProperties> = {
     display: "block",
     width: "100%",
     height: "100%",
-    background: "#0a0c14",
+    background: "transparent",
     cursor: "crosshair",
   },
 
   overlay: {
-    position: "absolute",
+    position: "fixed",
     inset: 0,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     background: "rgba(3,5,8,0.72)",
     backdropFilter: "blur(2px)",
+    zIndex: 999,
   },
   overlayCard: {
     textAlign: "center",

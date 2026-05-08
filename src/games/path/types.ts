@@ -1,13 +1,14 @@
 export type GamePhase =
-  | 'idle'
-  | 'memorize'
-  | 'countdown'
-  | 'navigate'
-  | 'result';
+  | "idle"
+  | "memorize"
+  | "countdown"
+  | "navigate"
+  | "result";
 
 export interface Point {
   x: number;
   y: number;
+  timeMs?: number;
 }
 
 export interface Obstacle {
@@ -16,13 +17,19 @@ export interface Obstacle {
   y: number;
   width: number;
   height: number;
+  baseX: number;
+  baseY: number;
+  moveType: "static" | "horizontal" | "vertical";
+  moveRange: number;
+  moveSpeed: number;
+  moveOffset: number;
 }
 
 export interface Trail {
   points: Point[];
 }
 
-export type CollisionResult = 'none' | 'obstacle' | 'out_of_bounds';
+export type CollisionResult = "none" | "obstacle" | "out_of_bounds";
 
 export interface AttemptResult {
   success: boolean;
@@ -36,12 +43,12 @@ export interface AttemptResult {
 export interface GameConfig {
   canvasWidth: number;
   canvasHeight: number;
-  memorizeTime: number; 
-  countdownTime: number; 
+  memorizeTime: number;
+  countdownTime: number;
   startRadius: number;
   targetRadius: number;
   obstacleCount: number;
-  difficulty: 'easy' | 'medium' | 'hard';
+  difficulty: "easy" | "medium" | "hard";
 }
 
 export interface GameState {
@@ -60,10 +67,10 @@ export interface GameState {
 }
 
 export interface ScoreBreakdown {
-  accuracy: number;       
-  pathEfficiency: number; 
-  speed: number;          
-  total: number;          
+  accuracy: number;
+  pathEfficiency: number;
+  speed: number;
+  total: number;
 }
 
 export type GameResult = {

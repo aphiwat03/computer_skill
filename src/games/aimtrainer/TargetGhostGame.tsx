@@ -11,17 +11,20 @@ import type { GameResult, GamePhase, LevelConfig, Shot } from "./types";
 
 // ==================== Types & Interfaces ====================
 
+/** Visual effect shown when player clicks (hit or miss) */
 interface ShotEffect {
   id: number;
-  x: number;
-  y: number;
-  hit: boolean;
+  x: number; // Position X (0-100 percentage)
+  y: number; // Position Y (0-100 percentage)
+  hit: boolean; // true = hit (green), false = miss (red)
 }
 
+/** Props for MenuScreen component */
 interface MenuScreenProps {
   onStart: (level: number) => void;
 }
 
+/** Props for HUD (heads-up display) component */
 interface HUDProps {
   phase: GamePhase;
   level: number;
@@ -30,17 +33,17 @@ interface HUDProps {
   totalTime: number;
 }
 
+/** Props for game over screen component */
 interface GameOverScreenProps {
-  score: number;
-  hitCount: number;
-  missCount: number;
-  centerHitCount: number;
-  earlyClickCount: number;
+  accuracy: number;
+  avgReaction: number;
+  avgSwitch: number;
   currentLevel: number;
   onMenu: () => void;
   cleared: boolean;
 }
 
+/** Props for level result screen component */
 interface ResultScreenProps {
   level: number;
   config: LevelConfig;
@@ -53,52 +56,74 @@ interface ResultScreenProps {
   onMenu: () => void;
 }
 
+/** Props for game canvas (main game area) component */
 interface GameCanvasProps {
   playerId: string;
   sessionId: string;
   onGameComplete: (result: GameResult) => void;
 }
 
+// ==================== Audio Effect Function ====================
+let sharedAudioCtx: AudioContext | null = null;
+/**
+ * Plays a beep sound to provide audio feedback for hits and misses
+ * - Hit: High pitch (880Hz) sine wave - 100ms
+ * - Miss: Low pitch (150Hz) sawtooth wave - 200ms
+ *
+ * @param isHit - true for hit sound, false for miss sound
+ */
 const playBeep = (isHit: boolean) => {
-  const AudioContext =
-    window.AudioContext || (window as any).webkitAudioContext;
-  if (!AudioContext) return;
+  // 2. ตรวจสอบและสร้าง Context แค่ครั้งเดียว
+  if (!sharedAudioCtx) {
+    const AudioContextClass =
+      window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextClass) return;
+    sharedAudioCtx = new AudioContextClass();
+  }
 
-  const audioCtx = new AudioContext();
-  const oscillator = audioCtx.createOscillator();
-  const gainNode = audioCtx.createGain();
+  // 3. ปลุก Context ให้ตื่น (บางเบราว์เซอร์จะสั่งพักไว้ถ้าไม่มีการใช้งาน)
+  if (sharedAudioCtx.state === "suspended") {
+    sharedAudioCtx.resume();
+  }
+
+  // 4. ส่วนการสร้างเสียง (Oscillator) ใช้ sharedAudioCtx แทน
+  const oscillator = sharedAudioCtx.createOscillator();
+  const gainNode = sharedAudioCtx.createGain();
 
   oscillator.connect(gainNode);
-  gainNode.connect(audioCtx.destination);
+  gainNode.connect(sharedAudioCtx.destination);
 
   if (isHit) {
     oscillator.type = "sine";
-    oscillator.frequency.setValueAtTime(880, audioCtx.currentTime);
-    gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+    oscillator.frequency.setValueAtTime(880, sharedAudioCtx.currentTime);
+    gainNode.gain.setValueAtTime(0.1, sharedAudioCtx.currentTime);
     gainNode.gain.exponentialRampToValueAtTime(
       0.01,
-      audioCtx.currentTime + 0.1,
+      sharedAudioCtx.currentTime + 0.1,
     );
-
-    oscillator.start(audioCtx.currentTime);
-    oscillator.stop(audioCtx.currentTime + 0.1);
+    oscillator.start(sharedAudioCtx.currentTime);
+    oscillator.stop(sharedAudioCtx.currentTime + 0.1);
   } else {
     oscillator.type = "sawtooth";
-    oscillator.frequency.setValueAtTime(150, audioCtx.currentTime);
-    gainNode.gain.setValueAtTime(0.05, audioCtx.currentTime);
+    oscillator.frequency.setValueAtTime(150, sharedAudioCtx.currentTime);
+    gainNode.gain.setValueAtTime(0.05, sharedAudioCtx.currentTime);
     gainNode.gain.exponentialRampToValueAtTime(
       0.01,
-      audioCtx.currentTime + 0.2,
+      sharedAudioCtx.currentTime + 0.2,
     );
-
-    oscillator.start(audioCtx.currentTime);
-    oscillator.stop(audioCtx.currentTime + 0.2);
+    oscillator.start(sharedAudioCtx.currentTime);
+    oscillator.stop(sharedAudioCtx.currentTime + 0.2);
   }
 };
 
 // ==================== MenuScreen Component ====================
 
+/**
+ * Main menu screen displayed at game start
+ * Shows game title and instructions, with click to start functionality
+ */
 function MenuScreen({ onStart }: MenuScreenProps) {
+  // Define all inline styles for the menu
   const styles: Record<string, CSSProperties> = {
     menu: {
       width: "100vw",
@@ -227,8 +252,16 @@ function MenuScreen({ onStart }: MenuScreenProps) {
 
 // ==================== HUD Component ====================
 
+/**
+ * Heads-up display showing current level and remaining time during gameplay
+ * - Level indicator on the left
+ * - Countdown timer with visual bar on the right
+ * - Timer color changes based on urgency (green > yellow > red)
+ */
 function HUD({ phase, level, timeLeft, totalTime }: HUDProps) {
+  // Calculate percentage for timer bar progress
   const pct = totalTime > 0 ? (timeLeft / totalTime) * 100 : 100;
+  // Change timer color based on time remaining
   const timeColor = pct > 50 ? "#00ffaa" : pct > 25 ? "#ffaa00" : "#ff4444";
   const secs = (timeLeft / 1000).toFixed(1);
 
@@ -339,6 +372,7 @@ function HUD({ phase, level, timeLeft, totalTime }: HUDProps) {
             <div style={{ ...s.hudValue, color: "#00ccff" }}>{level}</div>
           </div>
         </div>
+        {/* Show timer during shooting phase */}
         {phase === "shooting" && (
           <div style={s.timerWrap}>
             <div style={s.timerBarBg}>
@@ -354,16 +388,18 @@ function HUD({ phase, level, timeLeft, totalTime }: HUDProps) {
 
 // ==================== GameOverScreen Component ====================
 
+/**
+ * Displays game end screen with final statistics
+ * Shows summary of performance including score, hits, misses, center hits, and early clicks
+ * Different message and icon if all levels cleared vs game ended early
+ */
 function GameOverScreen({
-  score,
-  hitCount,
-  missCount,
-  centerHitCount,
-  earlyClickCount,
-  currentLevel,
+  accuracy,
+  avgReaction,
+  avgSwitch,
   onMenu,
-  cleared,
 }: GameOverScreenProps) {
+  // Define styles for game over screen
   const s: Record<string, CSSProperties> = {
     wrap: {
       width: "100vw",
@@ -457,43 +493,29 @@ function GameOverScreen({
   `}</style>
       <div style={s.bgGrid} />
       <div style={s.content}>
-        <div style={s.bigIcon}>{cleared ? "🏆" : "💀"}</div>
-        <h1 style={s.title}>{cleared ? "All Stages Cleared!" : "GAME OVER"}</h1>
-        {cleared && (
-          <div style={s.clearedSub}>You are a true sharpshooter!</div>
-        )}
+        <div style={s.bigIcon}>🏆</div>
+        <h1 style={s.title}>All Stages Cleared!</h1>
+
+        {/* กล่องสถิติใหม่ 3 ค่า */}
         <div style={s.stats}>
           <div style={s.stat}>
-            <span style={s.slabel}>Reached Level</span>
-            <span style={s.sval}>{currentLevel}</span>
+            <span style={s.slabel}>OVERALL ACCURACY</span>
+            <span style={{ ...s.sval, color: "#eeecec" }}>{accuracy}%</span>
           </div>
           <div style={s.stat}>
-            <span style={s.slabel}>Total Score</span>
-            <span style={{ ...s.sval, color: "#ffcc00" }}>
-              {score.toLocaleString()}
-            </span>
-          </div>
-          <div style={s.stat}>
-            <span style={s.slabel}>Hits</span>
-            <span style={{ ...s.sval, color: "#00ff88" }}>{hitCount}</span>
-          </div>
-          <div style={s.stat}>
-            <span style={s.slabel}>Misses</span>
-            <span style={{ ...s.sval, color: "#ff5050" }}>{missCount}</span>
-          </div>
-          <div style={s.stat}>
-            <span style={s.slabel}>Center Hits</span>
+            <span style={s.slabel}>AVG SWITCH (FLICK)</span>
             <span style={{ ...s.sval, color: "#00ccff" }}>
-              {centerHitCount}
+              {avgSwitch > 0 ? `${avgSwitch}ms` : "0 ms"}
             </span>
           </div>
           <div style={s.stat}>
-            <span style={s.slabel}>Early Clicks</span>
-            <span style={{ ...s.sval, color: "#ff8844" }}>
-              {earlyClickCount}
+            <span style={s.slabel}>AVG REACTION</span>
+            <span style={{ ...s.sval, color: "#ffcc00" }}>
+              {avgReaction > 0 ? `${avgReaction}ms` : "0 ms"}
             </span>
           </div>
         </div>
+
         <div style={s.btns}>
           <button
             style={{
@@ -513,6 +535,12 @@ function GameOverScreen({
 }
 
 // ==================== ResultScreen Component ====================
+
+/**
+ * Displays detailed performance metrics for the completed level
+ * Shows accuracy, average reaction time, switch time, and fastest reaction
+ * Provides option to proceed to next level or return to menu
+ */
 function ResultScreen({
   level,
   shots,
@@ -523,8 +551,10 @@ function ResultScreen({
   onNext,
   onMenu,
 }: ResultScreenProps) {
+  // Calculate accuracy percentage
   const accuracy =
     shots.length > 0 ? Math.round((hitCount / shots.length) * 100) : 0;
+  // Find best (fastest) reaction time among successful hits
   const hitShots = shots.filter((s) => s.hit);
   const bestTime =
     hitShots.length > 0
@@ -556,7 +586,7 @@ function ResultScreen({
       display: "flex",
       flexDirection: "column",
       alignItems: "center",
-      gap: 32, // เพิ่มช่องว่างให้ดูโปร่งขึ้น
+      gap: 32,
       padding: "40px 20px",
       maxWidth: 700,
       width: "100%",
@@ -580,7 +610,7 @@ function ResultScreen({
     },
     statsGrid: {
       display: "grid",
-      gridTemplateColumns: "repeat(2, 1fr)", // จัดเป็น 2 คอลัมน์ให้ดูสมมาตรและอ่านง่าย
+      gridTemplateColumns: "repeat(2, 1fr)",
       gap: 16,
       width: "100%",
     },
@@ -588,14 +618,14 @@ function ResultScreen({
       background: "rgba(255,255,255,0.02)",
       border: "1px solid rgba(255,255,255,0.08)",
       borderRadius: 4,
-      padding: "24px 16px", // เพิ่ม padding ให้การ์ดดูใหญ่ขึ้น
+      padding: "24px 16px",
       display: "flex",
       flexDirection: "column",
       alignItems: "center",
       gap: 8,
     },
     statVal: {
-      fontSize: 36, // ขยายขนาดตัวเลข
+      fontSize: 36,
       fontWeight: 900,
       fontFamily: '"Rajdhani", monospace',
       letterSpacing: 2,
@@ -691,8 +721,21 @@ function ResultScreen({
           ))}
         </div>
 
+        {/* Action buttons */}
         <div style={s.actions}>
-          {!isLastLevel && (
+          {isLastLevel ? (
+            <button
+              style={{
+                ...s.btn,
+                background: "rgba(255,204,0,0.15)",
+                borderColor: "rgba(255,204,0,0.5)",
+                color: "#ffcc00",
+              }}
+              onClick={onNext}
+            >
+              VIEW FINAL RESULTS →
+            </button>
+          ) : (
             <button
               style={{
                 ...s.btn,
@@ -724,7 +767,13 @@ function ResultScreen({
 
 // ==================== GameCanvas Component ====================
 
+/**
+ * Main game component that renders the game arena and handles gameplay
+ * Manages shot effects, target rendering, and game state transitions
+ * Routes between menu, shooting, result, and gameover screens
+ */
 function GameCanvas(props: GameCanvasProps) {
+  // Get all game functions and state from the useGame hook
   const {
     state,
     getLevelConfig,
@@ -734,20 +783,29 @@ function GameCanvas(props: GameCanvasProps) {
     submitAndExit,
   } = useGame(props.playerId, props.sessionId, props.onGameComplete);
   const arenaRef = useRef<HTMLDivElement>(null);
+
+  // Track temporary shot effects (hit/miss animations)
   const [shotEffects, setShotEffects] = useState<ShotEffect[]>([]);
   const effectIdRef = useRef(0);
 
+  /**
+   * Handles click events on the game arena
+   * Calculates click coordinates, creates visual effect, plays sound, and processes shot
+   */
   const onArenaClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       if (state.phase !== "shooting") return;
       const rect = arenaRef.current?.getBoundingClientRect();
       if (!rect) return;
+
+      // Convert click position to percentage-based coordinates (0-100)
       const x = ((e.clientX - rect.left) / rect.width) * 100;
       const y = ((e.clientY - rect.top) / rect.height) * 100;
       const clickPxX = e.clientX - rect.left;
       const clickPxY = e.clientY - rect.top;
       const id = ++effectIdRef.current;
 
+      // Check if click hit any target
       const clickedTarget = state.targets.find((t) => {
         const targetPxX = (t.x / 100) * rect.width;
         const targetPxY = (t.y / 100) * rect.height;
@@ -757,18 +815,23 @@ function GameCanvas(props: GameCanvasProps) {
         return Math.sqrt(dx * dx + dy * dy) <= 32;
       });
 
+      // Determine if shot was a hit
       let hit = false;
       if (clickedTarget && clickedTarget.id === state.activeTargetId) {
         hit = true;
       }
 
+      // Play audio feedback
       playBeep(hit);
+
+      // Add shot effect animation (will auto-remove after 600ms)
       setShotEffects((prev) => [...prev, { id, x, y, hit }]);
       setTimeout(
         () => setShotEffects((prev) => prev.filter((e) => e.id !== id)),
         600,
       );
 
+      // Pass shot to game logic
       const arenaSize = {
         width: rect.width,
         height: rect.height,
@@ -783,6 +846,10 @@ function GameCanvas(props: GameCanvasProps) {
   const showTargets =
     isShooting && state.targets.some((t) => t.isActive || t.isHit);
 
+  /**
+   * Update cursor style based on game phase
+   * Show crosshair during shooting, normal cursor otherwise
+   */
   useEffect(() => {
     document.body.style.cursor = isShooting ? "crosshair" : "default";
     return () => {
@@ -790,16 +857,18 @@ function GameCanvas(props: GameCanvasProps) {
     };
   }, [isShooting]);
 
+  // Route to different screen based on game phase
   if (state.phase === "menu") return <MenuScreen onStart={startLevel} />;
 
   if (state.phase === "gameover") {
+    const finalAccuracy = state.finalStats?.accuracy || 0;
+    const finalReaction = state.finalStats?.avgReaction || 0;
+    const finalSwitch = state.finalStats?.avgSwitch || 0;
     return (
       <GameOverScreen
-        score={state.score}
-        hitCount={state.hitCount}
-        missCount={state.missCount}
-        centerHitCount={state.centerHitCount}
-        earlyClickCount={state.earlyClickCount}
+        accuracy={finalAccuracy}
+        avgReaction={finalReaction}
+        avgSwitch={finalSwitch}
         currentLevel={state.currentLevel}
         onMenu={submitAndExit}
         cleared={state.levelComplete}
@@ -807,6 +876,7 @@ function GameCanvas(props: GameCanvasProps) {
     );
   }
 
+  // Calculate statistics for result screen
   if (state.phase === "result") {
     const hits = state.shots.filter((s) => s.hit);
     const switchTimes = hits
@@ -840,6 +910,7 @@ function GameCanvas(props: GameCanvasProps) {
     );
   }
 
+  // Main game arena during shooting phase
   const containerStyle: CSSProperties = {
     width: "100vw",
     height: "100vh",
@@ -1074,6 +1145,10 @@ function GameCanvas(props: GameCanvasProps) {
 
 // ==================== Main Component ====================
 
+/**
+ * Main export component for the Target Ghost Game
+ * Wrapper that passes props to GameCanvas
+ */
 export default function TargetGhostGame(props: GameCanvasProps) {
   return <GameCanvas {...props} />;
 }

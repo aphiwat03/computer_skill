@@ -50,12 +50,17 @@ export interface GameState {
   totalTime: number;
   shootingTimeLeft: number;
   startedAt: string;
+  finalStats?: {
+    accuracy: number;
+    avgReaction: number;
+    avgSwitch: number;
+  };
 }
 
 export interface GameResult {
   gameId: string;
   gameName: string;
-  playerId: string;
+  user_id: string;
   sessionId: string;
   score: number;
   accuracy: number;
@@ -74,35 +79,35 @@ export const LEVELS: LevelConfig[] = [
   {
     level: 1,
     targetCount: 3,
-    shootingTime: 30000,
+    shootingTime: 10000,
     signalInterval: 3000,
     label: "Beginner",
   },
   {
     level: 2,
     targetCount: 5,
-    shootingTime: 28000,
+    shootingTime: 10000,
     signalInterval: 2500,
     label: "Training",
   },
   {
     level: 3,
     targetCount: 7,
-    shootingTime: 25000,
+    shootingTime: 10000,
     signalInterval: 2000,
     label: "Intermediate",
   },
   {
     level: 4,
     targetCount: 9,
-    shootingTime: 22000,
+    shootingTime: 15000,
     signalInterval: 1800,
     label: "Advanced",
   },
   {
     level: 5,
     targetCount: 11,
-    shootingTime: 20000,
+    shootingTime: 15000,
     signalInterval: 1500,
     label: "Sharpshooter",
   },

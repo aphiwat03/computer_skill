@@ -2,28 +2,57 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import type { GameState, Target, Shot, LevelConfig, GameResult } from "./types";
 import { LEVELS, TARGET_HIT_RADIUS_PX } from "./types";
 
+// ==================== Game Constants ====================
+
+/** Delay before first target appears after level starts (milliseconds) */
 const INITIAL_SIGNAL_DELAY_MS = 3000;
+
+/** Radius of the hit detection area for targets (pixels) */
 const HIT_RADIUS_PX = TARGET_HIT_RADIUS_PX;
+
+/** Radius of center hit area (perfect aim) - 30% of hit radius */
 const CENTER_HIT_RADIUS_PX = HIT_RADIUS_PX * 0.3;
+
+/** Score penalty for clicking too early before target appears */
 const EARLY_CLICK_PENALTY = 150;
+
+/** Score penalty for missing a target */
 const MISS_PENALTY = 50;
 
+// ==================== Scoring Functions ====================
+
+/**
+ * Calculates aim score based on distance from target center
+ * Closer to center = higher score (max 150)
+ * Score = precision * 150, where precision ranges from 0 to 1
+ */
 function getAimScore(distanceFromCenter: number) {
   const precision = Math.max(0, 1 - distanceFromCenter / HIT_RADIUS_PX);
   return Math.round(precision * 150);
 }
 
+// ==================== Statistical Functions ====================
+
+/** Data structure to represent the game arena dimensions */
 interface ArenaSize {
   width: number;
   height: number;
 }
 
+/**
+ * Calculates the average (mean) of an array of numbers
+ * Returns 0 if array is empty
+ */
 function getAverage(values: number[]) {
   return values.length > 0
     ? values.reduce((sum, value) => sum + value, 0) / values.length
     : 0;
 }
 
+/**
+ * Calculates standard deviation to measure consistency
+ * Used to track how consistent the player's reaction times are
+ */
 function getStandardDeviation(values: number[]) {
   if (values.length === 0) return 0;
   const average = getAverage(values);
@@ -33,6 +62,16 @@ function getStandardDeviation(values: number[]) {
   return Math.sqrt(variance);
 }
 
+// ==================== Target Management Functions ====================
+
+/**
+ * Generates an array of targets with random positions
+ * Ensures targets don't overlap too closely (minimum 18 units apart)
+ * Uses margin of 12 units from arena edges
+ *
+ * @param count - Number of targets to generate
+ * @returns Array of Target objects positioned randomly
+ */
 function generateTargets(count: number): Target[] {
   const targets: Target[] = [];
   const margin = 12;
@@ -40,9 +79,11 @@ function generateTargets(count: number): Target[] {
 
   for (let i = 0; i < count; i++) {
     let placed = false;
+    // Try up to 200 times to find a valid position that doesn't overlap
     for (let a = 0; a < attempts; a++) {
       const x = margin + Math.random() * (100 - margin * 2);
       const y = margin + Math.random() * (100 - margin * 2);
+      // Check if too close to existing targets
       const tooClose = targets.some((t) => {
         const dx = t.x - x;
         const dy = t.y - y;
@@ -54,6 +95,7 @@ function generateTargets(count: number): Target[] {
         break;
       }
     }
+    // If no valid position found after attempts, place anyway (with potential overlap)
     if (!placed) {
       targets.push({
         id: i,
@@ -67,7 +109,15 @@ function generateTargets(count: number): Target[] {
   return targets;
 }
 
+/**
+ * Randomly activates one of the unhit targets
+ * Records the activation time for reaction time calculation
+ *
+ * @param targets - Array of all targets
+ * @returns Object containing updated targets, active target ID, and reaction start time
+ */
 function activateRandomTarget(targets: Target[]) {
+  // Filter out already hit targets
   const unhitTargets = targets.filter((t) => !t.isHit);
   if (unhitTargets.length === 0) {
     return {
@@ -77,6 +127,7 @@ function activateRandomTarget(targets: Target[]) {
     };
   }
 
+  // Pick a random unhit target
   const activeTarget =
     unhitTargets[Math.floor(Math.random() * unhitTargets.length)];
   const activatedAt = Date.now();
@@ -92,6 +143,18 @@ function activateRandomTarget(targets: Target[]) {
   };
 }
 
+// ==================== Initial Game State ====================
+
+/**
+ * Default game state when game starts or resets
+ * - phase: Current game phase (menu, shooting, result, gameover)
+ * - targets: Array of all target objects in current level
+ * - shots: Array of player's shots with their accuracy data
+ * - currentLevel: Current level (1-based)
+ * - score: Total accumulated score
+ * - lives/streaks: Player lives remaining
+ * - Various counters: hits, misses, center hits, early clicks
+ */
 const initialState: GameState = {
   phase: "menu",
   currentLevel: 1,
@@ -110,22 +173,47 @@ const initialState: GameState = {
   startedAt: "",
   totalTime: 0,
   shootingTimeLeft: 0,
+  finalStats: { accuracy: 0, avgReaction: 0, avgSwitch: 0 },
 };
 
+// ==================== Main Game Logic Hook ====================
+
+/**
+ * Core game logic hook that manages all game state and mechanics
+ *
+ * Responsibilities:
+ * - Manages level progression and target activation
+ * - Tracks player shots and calculates scores
+ * - Measures reaction times and accuracy
+ * - Manages timers for level duration
+ * - Compiles final results when game ends
+ *
+ * @param user_id - Unique identifier for the player
+ * @param sessionId - Unique identifier for the gaming session
+ * @param onGameComplete - Callback function when all levels are complete
+ *
+ * @returns Object with game state and all action handlers
+ */
 export function useGame(
-  playerId: string,
+  user_id: string,
   sessionId: string,
   onGameComplete: (result: GameResult) => void,
 ) {
   const [state, setState] = useState<GameState>(initialState);
-  const levelResultsRef = useRef<any[]>([]);
-  const initialStartTimeRef = useRef<string>(new Date().toISOString());
-  const signalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const shootingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const stateRef = useRef(state);
+
+  // Refs to store data that persists across renders
+  const levelResultsRef = useRef<any[]>([]); // Stores results from completed levels
+  const initialStartTimeRef = useRef<string>(new Date().toISOString()); // Game start time
+  const signalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null); // Target activation timer
+  const shootingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null); // Level timeout timer
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null); // Remaining time countdown
+  const stateRef = useRef(state); // Reference to current state for use in callbacks
   stateRef.current = state;
 
+  /**
+   * Clears all active timers to prevent memory leaks
+   * Must be called before starting new level or ending game
+   */
   const clearAllTimers = useCallback(() => {
     if (signalTimerRef.current) clearTimeout(signalTimerRef.current);
     if (shootingTimerRef.current) clearTimeout(shootingTimerRef.current);
@@ -135,10 +223,18 @@ export function useGame(
     countdownRef.current = null;
   }, []);
 
+  /**
+   * Gets the configuration for a specific level
+   * Returns level config with target count, shooting time, signal interval, etc.
+   */
   const getLevelConfig = useCallback((level: number): LevelConfig => {
     return LEVELS[Math.min(level - 1, LEVELS.length - 1)];
   }, []);
 
+  /**
+   * Schedules the next target to appear after signal interval
+   * Called after a hit to introduce a delay before next target
+   */
   const scheduleNextSignal = useCallback((levelConfig: LevelConfig) => {
     if (signalTimerRef.current) clearTimeout(signalTimerRef.current);
 
@@ -157,12 +253,20 @@ export function useGame(
     }, levelConfig.signalInterval);
   }, []);
 
+  /**
+   * Starts a new level with fresh targets
+   * Sets up timers for level duration and target activation
+   * Initializes all counters and state
+   *
+   * @param level - Level number to start (1-based)
+   */
   const startLevel = useCallback(
     (level: number) => {
       clearAllTimers();
       const config = getLevelConfig(level);
       const targets = generateTargets(config.targetCount);
 
+      // Use initial game time for first level, current time for subsequent levels
       const startedAtTime =
         levelResultsRef.current.length === 0
           ? initialStartTimeRef.current
@@ -186,6 +290,7 @@ export function useGame(
         shootingTimeLeft: config.shootingTime,
       }));
 
+      // Wait before showing first target
       signalTimerRef.current = setTimeout(() => {
         setState((prev) => {
           if (prev.phase !== "shooting" || prev.currentLevel !== level) {
@@ -224,6 +329,21 @@ export function useGame(
     [clearAllTimers, getLevelConfig],
   );
 
+  /**
+   * Handles player shooting action
+   * Calculates hit/miss, distance from center, reaction time, and score
+   * Updates target state and schedules next target
+   *
+   * Scoring:
+   * - Hit: reaction score (max 500) + accuracy score (max 150) + center bonus (150)
+   * - Center Hit: bonus 150 points
+   * - Early Click: -150 points
+   * - Miss: -50 points
+   *
+   * @param x - X coordinate of shot (0-100, percentage of arena width)
+   * @param y - Y coordinate of shot (0-100, percentage of arena height)
+   * @param arenaSize - Pixel dimensions of the game arena
+   */
   const handleShoot = useCallback(
     (x: number, y: number, arenaSize: ArenaSize) => {
       setState((prev) => {
@@ -231,6 +351,7 @@ export function useGame(
         const config = getLevelConfig(prev.currentLevel);
         const now = Date.now();
 
+        // Find the currently active target
         const activeTarget = prev.targets.find(
           (t) => t.id === prev.activeTargetId && t.isActive,
         );
@@ -238,6 +359,7 @@ export function useGame(
         let hitTargetId: number | null = null;
         let distanceFromCenter: number | undefined;
 
+        // Calculate if shot hit the active target
         if (activeTarget) {
           const dx = ((activeTarget.x - x) / 100) * arenaSize.width;
           const dy = ((activeTarget.y - y) / 100) * arenaSize.height;
@@ -248,6 +370,7 @@ export function useGame(
           }
         }
 
+        // Determine shot type and calculate metrics
         const isEarlyClick = !activeTarget;
         const reactionTime =
           activeTarget && prev.currentReactionStart
@@ -272,6 +395,7 @@ export function useGame(
             ? -EARLY_CLICK_PENALTY
             : -MISS_PENALTY;
 
+        // Record the shot with all relevant data
         const newShot: Shot = {
           x,
           y,
@@ -292,6 +416,7 @@ export function useGame(
         let newReactionStart = prev.currentReactionStart;
         let newLastHitAt = prev.lastHitAt;
 
+        // If hit, mark target as hit and schedule next target
         if (hit && hitTargetId !== null) {
           updatedTargets = prev.targets.map((t) =>
             t.id === hitTargetId ? { ...t, isHit: true, isActive: false } : t,
@@ -352,20 +477,60 @@ export function useGame(
     [getLevelConfig, scheduleNextSignal, clearAllTimers],
   );
 
+  /**
+   * Advances to the next level or ends game if all levels are complete
+   * Saves current level results before moving forward
+   */
   const nextLevel = useCallback(() => {
     const nextLvl = stateRef.current.currentLevel + 1;
+
+    const currentLevelResult = {
+      level: stateRef.current.currentLevel,
+      shots: stateRef.current.shots,
+      score: stateRef.current.score,
+      hitCount: stateRef.current.hitCount,
+      missCount: stateRef.current.missCount,
+      centerHitCount: stateRef.current.centerHitCount,
+      earlyClickCount: stateRef.current.earlyClickCount,
+    };
+
     if (nextLvl > LEVELS.length) {
-      setState((prev) => ({ ...prev, phase: "gameover", levelComplete: true }));
+      const allResults = [...levelResultsRef.current, currentLevelResult];
+      levelResultsRef.current = allResults;
+      const allShots = allResults.flatMap((r) => r.shots || []);
+      const hits = allShots.filter((s) => s.hit);
+      const accuracy =
+        allShots.length > 0
+          ? Math.round((hits.length / allShots.length) * 100)
+          : 0;
+
+      const reactionTimes = hits
+        .map((s) => s.reactionTime ?? 0)
+        .filter((t) => t > 0);
+      const avgReaction =
+        reactionTimes.length > 0
+          ? Math.round(
+              reactionTimes.reduce((a, b) => a + b, 0) / reactionTimes.length,
+            )
+          : 0;
+
+      const switchTimes = hits
+        .map((s) => s.switchTime)
+        .filter((time): time is number => typeof time === "number");
+      const avgSwitch =
+        switchTimes.length > 0
+          ? Math.round(
+              switchTimes.reduce((a, b) => a + b, 0) / switchTimes.length,
+            )
+          : 0;
+
+      setState((prev) => ({
+        ...prev,
+        phase: "gameover",
+        levelComplete: true,
+        finalStats: { accuracy, avgReaction, avgSwitch },
+      }));
     } else {
-      const currentLevelResult = {
-        level: stateRef.current.currentLevel,
-        shots: stateRef.current.shots,
-        score: stateRef.current.score,
-        hitCount: stateRef.current.hitCount,
-        missCount: stateRef.current.missCount,
-        centerHitCount: stateRef.current.centerHitCount,
-        earlyClickCount: stateRef.current.earlyClickCount,
-      };
       levelResultsRef.current = [
         ...levelResultsRef.current,
         currentLevelResult,
@@ -374,6 +539,10 @@ export function useGame(
     }
   }, [startLevel]);
 
+  /**
+   * Resets game to initial state
+   * Called when player returns to menu
+   */
   const restartGame = useCallback(() => {
     clearAllTimers();
     levelResultsRef.current = [];
@@ -381,21 +550,33 @@ export function useGame(
     setState({ ...initialState });
   }, [clearAllTimers]);
 
+  /**
+   * Builds final game result object combining all level results
+   * Calculates aggregate statistics like total score, accuracy, average reaction time
+   *
+   * @param finalState - Final game state when game ends
+   * @returns Complete GameResult object with all metrics and raw data
+   */
   const buildResult = useCallback(
     (finalState: GameState): GameResult => {
       const endedAt = new Date().toISOString();
       const durationMs =
         Date.now() - new Date(initialStartTimeRef.current).getTime();
-      const currentLevelResult = {
-        level: finalState.currentLevel,
-        shots: finalState.shots,
-        score: finalState.score,
-        hitCount: finalState.hitCount,
-        missCount: finalState.missCount,
-        centerHitCount: finalState.centerHitCount,
-        earlyClickCount: finalState.earlyClickCount,
-      };
-      const allResults = [...levelResultsRef.current, currentLevelResult];
+      const allResults =
+        finalState.phase === "gameover"
+          ? levelResultsRef.current
+          : [
+              ...levelResultsRef.current,
+              {
+                level: finalState.currentLevel,
+                shots: finalState.shots,
+                score: finalState.score,
+                hitCount: finalState.hitCount,
+                missCount: finalState.missCount,
+                centerHitCount: finalState.centerHitCount,
+                earlyClickCount: finalState.earlyClickCount,
+              },
+            ];
 
       const allShots = allResults.flatMap((r) => r.shots);
       const totalHits = allResults.reduce((sum, r) => sum + r.hitCount, 0);
@@ -419,7 +600,7 @@ export function useGame(
       return {
         gameId: "target-ghost",
         gameName: "Target Ghost",
-        playerId,
+        user_id,
         sessionId,
         score: totalScore,
         accuracy:
@@ -445,15 +626,22 @@ export function useGame(
         },
       };
     },
-    [playerId, sessionId],
+    [user_id, sessionId],
   );
 
+  /**
+   * Returns to main menu without submitting results
+   */
   const goToMenu = useCallback(() => {
     clearAllTimers();
     setState({ ...initialState });
     levelResultsRef.current = [];
   }, [clearAllTimers]);
 
+  /**
+   * Submits final game results and exits
+   * Builds complete result object and calls onGameComplete callback
+   */
   const submitAndExit = useCallback(() => {
     clearAllTimers();
     const finalResult = buildResult(stateRef.current);
@@ -462,10 +650,14 @@ export function useGame(
     levelResultsRef.current = [];
   }, [clearAllTimers, buildResult, onGameComplete]);
 
+  /**
+   * Cleanup effect: Clear timers when component unmounts
+   */
   useEffect(() => {
     return () => clearAllTimers();
   }, [clearAllTimers]);
 
+  // Return all game functions and state for use in UI components
   return {
     state,
     getLevelConfig,

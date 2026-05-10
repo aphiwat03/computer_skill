@@ -84,17 +84,24 @@ function generateObstacles(
 ): Obstacle[] {
   const { canvasWidth: W, canvasHeight: H, obstacleCount } = config;
   const obstacles: Obstacle[] = [];
-  const minDim = 30;
-  const maxDim = 80; // ปรับขนาด Max ลงเล็กน้อยให้มีพื้นที่เหลือให้วิ่งได้
-  const safeRadius = 110; // เพิ่มระยะห่างจากจุด Start และ End ให้มากขึ้นอย่างมีนัยสำคัญ
-  const maxAttempts = 200;
 
-  const now = Date.now(); // ใช้อ้างอิงเวลาปัจจุบันเพื่อให้กล่องเกิดมาตรงจุดพอดี
+  let currentObstacleCount = config.obstacleCount;
+  if (round === 3) {
+    currentObstacleCount += 2;
+  } else if (round === 4) {
+    currentObstacleCount += 4;
+  } else if (round >= 5) {
+    currentObstacleCount += 6;
+  }
+  const OBS_SIZE = 50;
+  const safeRadius = 110;
+  const maxAttempts = 300;
+  const now = Date.now();
 
-  for (let i = 0; i < obstacleCount; i++) {
+  for (let i = 0; i < currentObstacleCount; i++) {
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const w = minDim + Math.random() * (maxDim - minDim);
-      const h = minDim + Math.random() * (maxDim - minDim);
+      const w = OBS_SIZE;
+      const h = OBS_SIZE;
       const x = 20 + Math.random() * (W - w - 40);
       const y = 20 + Math.random() * (H - h - 40);
 
@@ -103,23 +110,44 @@ function generateObstacles(
 
       const distStart = distance({ x: cx, y: cy }, start);
       const distTarget = distance({ x: cx, y: cy }, target);
-
       if (distStart < safeRadius || distTarget < safeRadius) continue;
-
-      // No overlap with existing
       if (
         obstacles.some((o) =>
-          rectsOverlap({ x, y, width: w, height: h }, o, 10),
+          rectsOverlap({ x, y, width: w, height: h }, o, 15),
         )
       )
         continue;
-
       const isMoving = round >= 4;
       const moveType = isMoving
-        ? Math.random() > 0.5
+        ? i % 2 === 0
           ? "horizontal"
           : "vertical"
         : "static";
+      if (isMoving) {
+        const pathPadding = 35;
+
+        if (moveType === "horizontal") {
+          const pathTop = y - pathPadding;
+          const pathBottom = y + h + pathPadding;
+
+          if (
+            (start.y >= pathTop && start.y <= pathBottom) ||
+            (target.y >= pathTop && target.y <= pathBottom)
+          ) {
+            continue;
+          }
+        } else if (moveType === "vertical") {
+          const pathLeft = x - pathPadding;
+          const pathRight = x + w + pathPadding;
+
+          if (
+            (start.x >= pathLeft && start.x <= pathRight) ||
+            (target.x >= pathLeft && target.x <= pathRight)
+          ) {
+            continue;
+          }
+        }
+      }
 
       let moveRange = 0;
       let baseX = x;
@@ -128,14 +156,11 @@ function generateObstacles(
       let moveOffset = 0;
 
       if (moveType === "horizontal") {
-        // ระยะสวิงไปจนสุดซ้ายขวา (เว้นขอบ 20px)
         moveRange = (W - w - 40) / 2;
         baseX = 20 + moveRange;
-        // คำนวณให้จุดเริ่มต้นตรงกับค่า x ที่สุ่มได้พอดีเพื่อไม่ให้กล่องกระตุกตอนเริ่มเกม
         const ratio = Math.max(-1, Math.min(1, (x - baseX) / moveRange));
         moveOffset = Math.asin(ratio) - (now / 1000) * moveSpeed;
       } else if (moveType === "vertical") {
-        // ระยะสวิงไปจนสุดบนล่าง (เว้นขอบ 20px)
         moveRange = (H - h - 40) / 2;
         baseY = 20 + moveRange;
         const ratio = Math.max(-1, Math.min(1, (y - baseY) / moveRange));

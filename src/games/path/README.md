@@ -1,78 +1,35 @@
-# 🧠 Spatial Memory Test
+# Spatial Memory Benchmark
 
-> **Esports Cognitive Benchmark — Spatial Processing Module**
+A cognitive assessment tool built as a React Component. Designed to test and benchmark a player's spatial memory, visual navigation, and mouse control precision.
 
-## Overview
+## 📋 Overview
 
-ทดสอบความจำเชิงพื้นที่และความนิ่งของมือโดยไม่พึ่งพาสายตา ผู้เล่นต้องจำตำแหน่งจุดเริ่มต้น เป้าหมาย และสิ่งกีดขวาง จากนั้นนำทางผ่านหน้าจอที่ขาวโพลน
+Spatial Memory is a plug-and-play module. It does not connect to any database directly. It receives player session data via props and returns a standardized `GameResult` object back to the main system upon completion.
 
-## What It Measures
+## 🎮 How to Play
 
-| Metric | Description |
-|--------|-------------|
-| **Spatial Memory** | ความสามารถจดจำตำแหน่งในพื้นที่ 2D |
-| **Hand Steadiness** | ความนิ่งของมือขณะเคลื่อนที่โดยไม่มี Visual Feedback |
-| **Path Planning** | วางเส้นทางหลบสิ่งกีดขวางในความจำ |
-| **Motor Precision** | ความแม่นยำในการหยุด ณ เป้าหมาย |
+1. **Memorize (จำตำแหน่ง):** The screen will show a Start point, an END point, and several obstacles. You have a few seconds to memorize the safe path.
+2. **Navigate (นำทางแบบตาบอด):** The screen turns completely white (or shows only the start point). You must click the START point and drag your cursor to the END point based entirely on your memory.
+3. **Avoid Collisions:** Do not hit any obstacles or drag outside the canvas boundaries.
+4. **Moving Obstacles:** In levels 4 and 5, obstacles will continuously move, requiring you to anticipate their positions in your mind!
 
-## Scoring
-
-```
-Score = Accuracy (50%) + Path Efficiency (25%) + Speed (25%)
-Max per round = 1,000 points
-```
-
-### Rating Tiers
-
-| Rating | Score |
-|--------|-------|
-| 🥇 LEGENDARY | 900+ |
-| 💎 DIAMOND | 750–899 |
-| 🏆 PLATINUM | 550–749 |
-| 🥈 GOLD | 350–549 |
-| ⚪ SILVER | 150–349 |
-| 🟫 BRONZE | 0–149 |
-
-## Phases
-
-1. **MEMORIZE** — ดูแผนที่ จำตำแหน่งทุกอย่าง (2.5–5s ตาม Difficulty)
-2. **COUNTDOWN** — เตรียมตัว 3 วินาที
-3. **NAVIGATE** — หน้าจอขาวโพลน ลากเมาส์ไปยังเป้าหมาย
-4. **RESULT** — ดูผลคะแนนและ Breakdown
-
-## File Structure
-
-```
-games/spatial-memory/
-├── SpatialMemoryGame.tsx   # React component + canvas rendering
-├── logic.ts                # Pure game logic, no React deps
-├── types.ts                # TypeScript interfaces
-└── README.md               # This file
-```
-
-## Usage
+## 🚀 Integration (For Main System)
 
 ```tsx
-import SpatialMemoryGame from '@/games/spatial-memory/SpatialMemoryGame';
+import SpatialMemoryGame from "./spatial-memory/SpatialMemoryGame";
 
-<SpatialMemoryGame
-  difficulty="medium"
-  totalRounds={3}
-  onComplete={(results) => console.log(results)}
-/>
+export default function App() {
+  const handleGameComplete = (result) => {
+    // The main system handles database saving here
+    console.log("Saving to database...", result);
+  };
+
+  return (
+    <SpatialMemoryGame
+      playerId="STUDENT_001"
+      sessionId="SESSION_XYZ"
+      onGameComplete={handleGameComplete}
+    />
+  );
+}
 ```
-
-## Props
-
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `difficulty` | `'easy' \| 'medium' \| 'hard'` | `'medium'` | ระดับความยาก |
-| `totalRounds` | `number` | `3` | จำนวนรอบ |
-| `onComplete` | `(results: AttemptResult[]) => void` | — | Callback เมื่อจบเกม |
-
-## Tech Stack
-
-- **React 18** + TypeScript
-- **Vite** build tool
-- **Canvas API** for rendering
-- Zero external game dependencies

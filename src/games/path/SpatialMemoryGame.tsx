@@ -6,7 +6,13 @@ import {
   useState,
   useReducer,
 } from "react";
-import type { GameState, GameConfig, Point, AttemptResult } from "./types";
+import type {
+  GameState,
+  GameConfig,
+  Point,
+  AttemptResult,
+  GameResult,
+} from "./types";
 import {
   generateLevel,
   createDefaultConfig,
@@ -22,10 +28,10 @@ import {
 
 interface SpatialMemoryGameProps {
   difficulty?: GameConfig["difficulty"];
-  totalRounds?: number;
-  playerId?: string;
-  sessionId?: string;
-  onGameComplete?: (result: any) => void;
+  totalRounds: number;
+  playerId: string;
+  sessionId: string;
+  onGameComplete?: (result: GameResult) => void;
   onComplete?: (results: AttemptResult[]) => void;
 }
 
@@ -43,7 +49,8 @@ type Action =
   | { type: "MOUSE_UP" }
   | { type: "END_NAVIGATE"; payload: AttemptResult }
   | { type: "NEXT_ROUND" }
-  | { type: "RESET" };
+  | { type: "RESET" }
+  | { type: "SHOW_SUMMARY" };
 
 function initState(totalRounds: number): GameState {
   return {
@@ -103,6 +110,8 @@ function reducer(state: GameState, action: Action): GameState {
       return { ...state, phase: "idle" };
     case "RESET":
       return initState(state.totalRounds);
+    case "SHOW_SUMMARY":
+      return { ...state, phase: "summary" as any };
     default:
       return state;
   }
@@ -126,7 +135,6 @@ const COLORS = {
 };
 
 const MAX_CANVAS_PIXEL_RATIO = 3;
-
 function drawGame(
   ctx: CanvasRenderingContext2D,
   state: GameState,
@@ -321,6 +329,7 @@ export default function SpatialMemoryGame({
   onComplete,
 }: SpatialMemoryGameProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [startWarning, setStartWarning] = useState(false);
   const [state, dispatch] = useReducer(reducer, totalRounds, initState);
   const [countdown] = useState(3);
   const [memorizeProgress, setMemorizeProgress] = useState(100);
@@ -414,9 +423,7 @@ export default function SpatialMemoryGame({
     return () => cancelAnimationFrame(animationId);
   }, [config, canvasRenderVersion]);
 
-  // Phase machine
   const startRound = useCallback(() => {
-    // ส่ง state.round + 1 ไปเพื่อให้ระบบรู้ว่าเป็นด่านอะไร
     const level = generateLevel(config, state.round + 1);
     dispatch({ type: "START_MEMORIZE", payload: level });
 
@@ -453,11 +460,31 @@ export default function SpatialMemoryGame({
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
-      if (stateRef.current.phase !== "navigate") return;
+      const s = stateRef.current;
+      if (s.phase !== "navigate") return;
       const pt = getCanvasPoint(e);
+
+      // เช็คระยะห่างจากจุด Start
+      const dx = pt.x - s.start.x;
+      const dy = pt.y - s.start.y;
+      const distFromStart = Math.sqrt(dx * dx + dy * dy);
+
+      // ถ้าคลิกนอกจุด Start
+      if (distFromStart > config.startRadius + 15) {
+        setStartWarning(true); // โชว์ข้อความเตือน
+
+        // ตั้งเวลา 2 วินาทีให้ข้อความหายไปเอง
+        setTimeout(() => {
+          setStartWarning(false);
+        }, 2000);
+
+        return; // บล็อกการวาดเส้น
+      }
+
+      setStartWarning(false); // ถ้ากดถูกที่ ให้แน่ใจว่าข้อความเตือนหายไป
       dispatch({ type: "MOUSE_DOWN", payload: pt });
     },
-    [getCanvasPoint],
+    [getCanvasPoint, config],
   );
 
   const handleMouseMove = useCallback(
@@ -500,17 +527,6 @@ export default function SpatialMemoryGame({
     dispatch({ type: "END_NAVIGATE", payload: result });
   }, [config, playerId, sessionId, onGameComplete, onComplete]);
 
-  const roundScore = state.result ? calculateScore(state.result, config) : 0;
-  const breakdown = state.result
-    ? calculateBreakdown(state.result, config)
-    : null;
-  const accumulatedScore =
-    stateRef.current.roundResults.reduce(
-      (sum, r) => sum + calculateScore(r, config),
-      0,
-    ) + roundScore;
-  const rating = getRating(accumulatedScore);
-
   const isLastRound = state.round >= state.totalRounds;
 
   return (
@@ -521,18 +537,10 @@ export default function SpatialMemoryGame({
       {/* Header */}
       {state.phase !== "idle" && (
         <div style={styles.header}>
-          <div style={styles.headerLeft}>
-            <span style={styles.gameTitle}>SPATIAL MEMORY</span>
-            <span style={styles.diffBadge}>{difficulty.toUpperCase()}</span>
-          </div>
           <div style={styles.headerRight}>
             <span style={styles.roundLabel}>ROUND</span>
             <span style={styles.roundNum}>
               {state.round}/{state.totalRounds}
-            </span>
-            <span style={styles.scoreLabel}>SCORE</span>
-            <span style={styles.scoreNum}>
-              {accumulatedScore.toLocaleString()}
             </span>
           </div>
         </div>
@@ -571,13 +579,14 @@ export default function SpatialMemoryGame({
               <div style={styles.overlayIcon}>◎</div>
               <h2 style={styles.overlayTitle}>SPATIAL MEMORY TEST</h2>
               <p style={styles.overlayDesc}>
-                จำตำแหน่ง <span style={{ color: "#00ff9d" }}>จุดเริ่มต้น</span>{" "}
-                <span style={{ color: "#ff3d6b" }}>เป้าหมาย</span> และ{" "}
-                <span style={{ color: "#6677ff" }}>สิ่งกีดขวาง</span>
+                Memorize the locations of the{" "}
+                <span style={{ color: "#00ff9d" }}>Start</span>,{" "}
+                <span style={{ color: "#ff3d6b" }}>Target</span>, and{" "}
+                <span style={{ color: "#6677ff" }}>Obstacles</span>.
                 <br />
-                จากนั้นนำเคอร์เซอร์ไปยังเป้าหมาย
+                Then, navigate your cursor to the target.
                 <br />
-                (ด่านที่ 4 และ 5 สิ่งกีดขวางจะมีการเคลื่อนไหว)
+                (In levels 4 and 5, the obstacles will move)
               </p>
               <button style={styles.btnPrimary} onClick={startRound}>
                 {state.round === 0 ? "Start" : "Next Round"}
@@ -609,24 +618,54 @@ export default function SpatialMemoryGame({
         )}
 
         {state.phase === "navigate" && (
-          <div style={styles.navigateBadge}>
-            {state.isMouseDown ? "● กำลังนำทาง..." : "🖱 กด + ลาก เพื่อนำทาง"}
-          </div>
-        )}
+          <>
+            <div style={styles.navigateBadge}>
+              {state.isMouseDown ? "● กำลังนำทาง..." : "🖱 กด + ลาก เพื่อนำทาง"}
+            </div>
 
-        {state.phase === "result" && state.result && breakdown && (
-          <div style={styles.overlay}>
-            <div style={styles.resultCard}>
-              <div
-                style={{
-                  ...styles.resultStatus,
-                  color: state.result.success ? "#00ff9d" : "#ff3d6b",
-                }}
-              >
-                {state.result.success ? "✓ SUCCESS" : "✗ FAILED"}
+            {/* 🚨 ข้อความเตือนเมื่อเริ่มผิดจุด */}
+            {startWarning && !state.isMouseDown && (
+              <div style={styles.startWarningText}>
+                Please begin at the START point
               </div>
+            )}
+          </>
+        )}
+        {/* 1. หน้า Result แต่ละด่าน (แสดงแค่ Accuracy กับ Time) */}
+        {state.phase === "result" && state.result && (
+          <div
+            style={{ ...styles.overlay, background: "#030508", zIndex: 1000 }}
+          >
+            <div style={styles.bgGrid} />
+            <div
+              style={{
+                position: "relative",
+                zIndex: 1,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                maxWidth: 700,
+                width: "100%",
+                padding: "40px 20px",
+              }}
+            >
+              <div style={styles.badge}>
+                ROUND {state.round} — {difficulty.toUpperCase()}
+              </div>
+
+              <h2 style={styles.title}>PERFORMANCE METRICS</h2>
+
+              {/* แจ้งเตือนสาเหตุที่พลาด */}
               {!state.result.success && (
-                <div style={styles.failReason}>
+                <div
+                  style={{
+                    ...styles.failReason,
+                    fontSize: 18,
+                    fontWeight: "bold",
+                    marginBottom: 24,
+                  }}
+                >
+                  ✗{" "}
                   {state.result.collisionType === "obstacle"
                     ? "ชนสิ่งกีดขวาง"
                     : state.result.collisionType === "out_of_bounds"
@@ -635,38 +674,168 @@ export default function SpatialMemoryGame({
                 </div>
               )}
 
-              {state.result.success && (
-                <div style={styles.breakdown}>
-                  <Meter
-                    label="ACCURACY"
-                    value={breakdown.accuracy}
-                    color="#00ff9d"
-                  />
-                  <Meter
-                    label="PATH EFF."
-                    value={breakdown.pathEfficiency}
-                    color="#00cfff"
-                  />
-                  <Meter
-                    label="SPEED"
-                    value={breakdown.speed}
-                    color="#ffa94d"
-                  />
-                </div>
-              )}
-
-              <div style={styles.roundScore}>
-                +{roundScore.toLocaleString()} pts
+              <div style={styles.statsGrid}>
+                {[
+                  {
+                    icon: "📊",
+                    val: `${calculateBreakdown(state.result, config).accuracy}%`,
+                    label: "ACCURACY",
+                    color: state.result.success ? "#00ff9d" : "#ff3d6b",
+                  },
+                  {
+                    icon: "⏱️",
+                    val: `${(state.result.timeTaken / 1000).toFixed(2)}s`,
+                    label: "TIME TAKEN",
+                    color: "#00ccff",
+                  },
+                ].map((item: any, i) => (
+                  <div key={i} style={styles.statCard}>
+                    <div style={{ fontSize: 24, marginBottom: 4 }}>
+                      {item.icon}
+                    </div>
+                    <div
+                      style={{
+                        ...styles.statVal,
+                        ...(item.color
+                          ? { color: item.color }
+                          : { color: "#fff" }),
+                      }}
+                    >
+                      {item.val}
+                    </div>
+                    <div style={styles.statLabel}>{item.label}</div>
+                  </div>
+                ))}
               </div>
 
-              <button
-                style={styles.btnPrimary}
-                onClick={() => {
-                  if (isLastRound) {
+              {/* Action buttons */}
+              <div style={styles.actions}>
+                {isLastRound ? (
+                  <button
+                    style={{
+                      ...styles.btn,
+                      background: "rgba(255,204,0,0.15)",
+                      borderColor: "rgba(255,204,0,0.5)",
+                      color: "#ffcc00",
+                    }}
+                    // เปลี่ยนให้วิ่งไปหน้า Summary แทนการส่งข้อมูลทันที
+                    onClick={() => dispatch({ type: "SHOW_SUMMARY" })}
+                  >
+                    VIEW FINAL RESULTS →
+                  </button>
+                ) : (
+                  <button
+                    style={{
+                      ...styles.btn,
+                      background: "rgba(0,255,170,0.15)",
+                      borderColor: "rgba(0,255,170,0.5)",
+                      color: "#00ffaa",
+                    }}
+                    onClick={() => {
+                      dispatch({ type: "NEXT_ROUND" });
+                      startRound();
+                    }}
+                  >
+                    NEXT ROUND →
+                  </button>
+                )}
+                <button
+                  style={{
+                    ...styles.btn,
+                    background: "transparent",
+                    borderColor: "rgba(255,255,255,0.12)",
+                    color: "rgba(255,255,255,0.45)",
+                  }}
+                  onClick={() => dispatch({ type: "RESET" })}
+                >
+                  MAIN MENU
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 2. หน้า Summary (สรุปค่าเฉลี่ยทั้งหมด) */}
+        {(state.phase as any) === "summary" && (
+          <div
+            style={{ ...styles.overlay, background: "#030508", zIndex: 1000 }}
+          >
+            <div style={styles.bgGrid} />
+            <div
+              style={{
+                position: "relative",
+                zIndex: 1,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                maxWidth: 700,
+                width: "100%",
+                padding: "40px 20px",
+              }}
+            >
+              <div style={styles.badge}>ALL STAGES CLEARED</div>
+              <h2 style={styles.title}>FINAL AVERAGE</h2>
+
+              <div style={styles.statsGrid}>
+                {[
+                  {
+                    icon: "📊",
+                    // คำนวณค่าเฉลี่ยความแม่นยำ
+                    val: `${Math.round(state.roundResults.reduce((sum, r) => sum + calculateBreakdown(r, config).accuracy, 0) / state.totalRounds)}%`,
+                    label: "AVG ACCURACY",
+                    color: "#00ff9d",
+                  },
+                  {
+                    icon: "⏱️",
+                    // คำนวณค่าเฉลี่ยเวลา
+                    val: `${(state.roundResults.reduce((sum, r) => sum + r.timeTaken, 0) / state.totalRounds / 1000).toFixed(2)}s`,
+                    label: "AVG TIME TAKEN",
+                    color: "#00ccff",
+                  },
+                ].map((item: any, i) => (
+                  <div key={i} style={styles.statCard}>
+                    <div style={{ fontSize: 24, marginBottom: 4 }}>
+                      {item.icon}
+                    </div>
+                    <div
+                      style={{
+                        ...styles.statVal,
+                        ...(item.color
+                          ? { color: item.color }
+                          : { color: "#fff" }),
+                      }}
+                    >
+                      {item.val}
+                    </div>
+                    <div style={styles.statLabel}>{item.label}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={styles.actions}>
+                <button
+                  style={{
+                    ...styles.btn,
+                    background: "rgba(255,204,0,0.15)",
+                    borderColor: "rgba(255,204,0,0.5)",
+                    color: "#ffcc00",
+                  }}
+                  onClick={() => {
                     const allResults = stateRef.current.roundResults;
-                    const totalScore = allResults.reduce(
-                      (sum, r) => sum + calculateScore(r, config),
-                      0,
+                    const successCount = allResults.filter(
+                      (r) => r.success,
+                    ).length;
+
+                    const avgAccuracy = Math.round(
+                      allResults.reduce(
+                        (sum, r) =>
+                          sum + calculateBreakdown(r, config).accuracy,
+                        0,
+                      ) / state.totalRounds,
+                    );
+                    const avgTimeMs = Math.round(
+                      allResults.reduce((sum, r) => sum + r.timeTaken, 0) /
+                        state.totalRounds,
                     );
 
                     const gameResult = {
@@ -674,12 +843,9 @@ export default function SpatialMemoryGame({
                       gameName: "Spatial Memory Test",
                       playerId,
                       sessionId,
-                      score: totalScore,
-                      accuracy:
-                        (allResults.filter((r) => r.success).length /
-                          allResults.length) *
-                        100,
-                      reactionTimeMs: allResults[0]?.timeTaken ?? 0,
+                      score: successCount,
+                      accuracy: avgAccuracy, // ส่งค่าเฉลี่ยไปใน object ด้วย
+                      reactionTimeMs: avgTimeMs, // ส่งค่าเฉลี่ยไปใน object ด้วย
                       responseTimesMs: allResults.map((r) => r.timeTaken),
                       startedAt: new Date(
                         gameStartTimeRef.current,
@@ -688,28 +854,25 @@ export default function SpatialMemoryGame({
                       durationMs: Date.now() - gameStartTimeRef.current,
                       rawData: {
                         roundCount: allResults.length,
-                        successCount: allResults.filter((r) => r.success)
-                          .length,
+                        successCount: successCount,
                         difficulty,
                         rounds: allResults.map((r, i) => ({
                           round: i + 1,
                           success: r.success,
                           timeTaken: r.timeTaken,
-                          score: calculateScore(r, config),
+                          errorMargin: Math.round(r.distanceFromTarget),
+                          accuracy: calculateBreakdown(r, config).accuracy,
                         })),
                       },
                     };
 
                     if (onGameComplete) onGameComplete(gameResult);
                     if (onComplete) onComplete(allResults);
-                  } else {
-                    dispatch({ type: "NEXT_ROUND" });
-                    setTimeout(startRound, 100);
-                  }
-                }}
-              >
-                {isLastRound ? "🏆 สรุปผลและกลับเมนูหลัก" : "รอบถัดไป →"}
-              </button>
+                  }}
+                >
+                  SUBMIT & EXIT
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -717,11 +880,6 @@ export default function SpatialMemoryGame({
 
       {/* Footer rating */}
       <div style={styles.footer}>
-        <span
-          style={{ color: rating.color, fontWeight: 700, letterSpacing: 2 }}
-        >
-          ◆ {rating.label}
-        </span>
         <span style={styles.footerHint}>
           {state.phase === "navigate"
             ? "หน้าจอขาว — ใช้ความจำในการนำทาง"
@@ -855,7 +1013,6 @@ const styles: Record<string, React.CSSProperties> = {
     flex: "0 1 auto",
     position: "relative",
     margin: "0 auto 16px",
-    // ปรับ maxWidth ให้เล็กลงเพื่อให้หน้าจอเกมซูมออก
     width: "min(calc(100vw - 32px), 800px)",
     maxHeight: "calc(100vh - 120px)",
     aspectRatio: "700 / 450",
@@ -1032,6 +1189,90 @@ const styles: Record<string, React.CSSProperties> = {
     textTransform: "uppercase",
   },
 
+  badge: {
+    color: "rgba(255,255,255,0.4)",
+    fontSize: 14,
+    letterSpacing: 4,
+    textTransform: "uppercase",
+    border: "1px solid rgba(255,255,255,0.1)",
+    padding: "8px 20px",
+    borderRadius: 2,
+    marginBottom: 16,
+  },
+  title: {
+    fontSize: 32,
+    fontWeight: 900,
+    letterSpacing: 6,
+    textTransform: "uppercase",
+    color: "#fff",
+    margin: "0 0 32px 0",
+  },
+  statsGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, 1fr)",
+    gap: 16,
+    width: "100%",
+    marginBottom: 32,
+  },
+  statCard: {
+    background: "rgba(255,255,255,0.02)",
+    border: "1px solid rgba(255,255,255,0.08)",
+    borderRadius: 4,
+    padding: "24px 16px",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 8,
+  },
+  statVal: {
+    fontSize: 36,
+    fontWeight: 900,
+    fontFamily: '"Rajdhani", monospace',
+    letterSpacing: 2,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: "rgba(255,255,255,0.4)",
+    letterSpacing: 3,
+    textTransform: "uppercase",
+  },
+  actions: {
+    display: "flex",
+    gap: 16,
+    flexWrap: "wrap",
+    justifyContent: "center",
+  },
+  btn: {
+    padding: "14px 36px",
+    fontFamily: '"Rajdhani", "Sarabun", sans-serif',
+    fontSize: 15,
+    fontWeight: 700,
+    letterSpacing: 3,
+    textTransform: "uppercase",
+    borderRadius: 3,
+    cursor: "pointer",
+    transition: "all 0.2s",
+    border: "1px solid",
+  },
+  startWarningText: {
+    position: "absolute",
+    top: "50%",
+    left: "50%",
+    transform: "translate(-50%, -50%)",
+    padding: "12px 24px",
+    background: "rgba(255, 61, 107, 0.9)", // สีแดงชมพูแบบ Target
+    color: "#fff",
+    borderRadius: 4,
+    fontSize: 18,
+    fontWeight: 900,
+    letterSpacing: 2,
+    textTransform: "uppercase",
+    boxShadow: "0 0 20px rgba(255, 61, 107, 0.4)",
+    pointerEvents: "none", // เพื่อไม่ให้ตัวหนังสือขวางการคลิก
+    zIndex: 100,
+    fontFamily: '"Rajdhani", sans-serif',
+    whiteSpace: "nowrap",
+  },
   footer: {
     display: "none",
   },

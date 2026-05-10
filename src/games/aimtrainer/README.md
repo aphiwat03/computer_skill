@@ -1,187 +1,51 @@
-# Reaction Time Test - Target Ghost Game
+# Target Ghost (Reaction Time & Aim Trainer)
 
-A high-intensity reaction time training game built with React and TypeScript. Test and improve your reflexes by clicking targets as quickly as possible!
+A high-intensity reaction time and aim training game built as a React Component. Designed to measure and improve player reflexes, mouse control (flicking), and precision.
 
 ## 📋 Overview
 
-Target Ghost Game is an interactive gaming experience designed to measure and improve your reaction time. The game features progressive difficulty levels, visual feedback, and detailed performance analytics.
+Target Ghost is a plug-and-play game module. It does not connect to any database directly. Instead, it receives player session data via props and returns a standardized `GameResult` object back to the main system upon completion.
 
-## 🎮 Game Mechanics
+## 🎮 How to Play
 
-### Game Phases
+1. **Wait for the Signal:** The game will spawn targets on the screen. Wait until a target activates (shows a red glowing ring).
+2. **React Quickly:** Click the activated target as fast as possible.
+3. **Don't Rush:** Clicking before a target activates (Early Click) or clicking on the background (Miss) will result in score penalties.
+4. **Clear Stages:** Survive the time limit across 5 progressive difficulty levels to clear the game.
 
-1. **Menu** - Main entry point with game instructions
-2. **Memorize** - Remember the positions of all targets on screen (4 seconds by default)
-3. **Blackout** - Targets disappear from view (1-2 seconds)
-4. **Shooting** - Targets reappear one by one; click them as fast as possible
-5. **Result** - View performance metrics and ratings
-6. **Game Over** - Final score summary after level completion
+## 📈 Performance Metrics Explained
 
-### How to Play
+The game evaluates two distinct types of speed:
 
-- Targets appear in sequence during the shooting phase
-- When a target shows a **red light**, click it immediately
-- Hit accuracy and reaction time are tracked
-- Progress through 5 difficulty levels
-- Complete all levels to become a **Sharpshooter**!
+1. **Avg Reaction Time:** Measures basic human reflex. The time taken from when a target **activates (turns red)** to when the player clicks it.
+2. **Avg Switch (Flick) Time:** Measures mouse control and muscle memory. The time taken from **destroying the previous target** to successfully destroying the current one (moving from point A to point B).
 
 ## 📊 Difficulty Levels
 
-| Level | Name         | Targets | Memorize | Blackout | Shooting | Signal |
-| ----- | ------------ | ------- | -------- | -------- | -------- | ------ |
-| 1     | Beginner     | 3       | 4s       | 1s       | 30s      | 3s     |
-| 2     | Training     | 5       | 4s       | 1.2s     | 28s      | 2.5s   |
-| 3     | Intermediate | 7       | 3.5s     | 1.5s     | 25s      | 2s     |
-| 4     | Advanced     | 9       | 3s       | 1.8s     | 22s      | 1.8s   |
-| 5     | Sharpshooter | 11      | 2.5s     | 2s       | 20s      | 1.5s   |
+| Level | Name         | Targets on Screen | Time Limit | Signal Interval |
+| :---- | :----------- | :---------------- | :--------- | :-------------- |
+| 1     | Beginner     | 3                 | 10s        | 3.0s            |
+| 2     | Training     | 5                 | 10s        | 2.5s            |
+| 3     | Intermediate | 7                 | 10s        | 2.0s            |
+| 4     | Advanced     | 9                 | 15s        | 1.8s            |
+| 5     | Sharpshooter | 11                | 15s        | 1.5s            |
 
-## 🏆 Rating System
-
-Performance is rated based on accuracy and average reaction time:
-
-- **PERFECT** ⭐⭐⭐ - 100% accuracy + <400ms reaction time
-- **EXCELLENT** ⭐⭐ - ≥80% accuracy + <700ms reaction time
-- **GOOD** ⭐ - ≥50% accuracy
-- **TRY AGAIN** - Below good performance
-
-## 📈 Performance Metrics
-
-After each level, view detailed statistics:
-
-- **Targets Hit** - Number of successful clicks
-- **Accuracy** - Percentage of targets hit
-- **Avg Reaction** - Average time to click targets
-- **Fastest** - Quickest reaction time
-- **Misses** - Shots that missed targets
-- **Score** - Total points earned
-
-## 🗂️ Project Structure
-
-```
-aimtrainer/
-├── TargetGhostGame.tsx    # Main game component with UI
-├── logic.ts               # Game state management & mechanics
-├── types.ts               # TypeScript interfaces & level config
-└── README.md              # This file
-```
-
-### File Details
-
-**TargetGhostGame.tsx**
-
-- Main React component rendering the game UI
-- Handles user interactions (clicks, mouse movements)
-- Displays HUD, menus, result screens
-- Manages visual effects and animations
-
-**logic.ts**
-
-- Core game logic using React hooks
-- Target generation and positioning
-- Timer management for game phases
-- Score calculation and result tracking
-- Game state management
-
-**types.ts**
-
-- TypeScript type definitions
-- `GameState` - Current game state
-- `Target` - Target object with position & status
-- `Shot` - Player shot information
-- `LevelConfig` - Level configuration
-- `GameResult` - Final game results
-- `LEVELS` - Array of all 5 level configurations
-
-## 🎯 Key Features
-
-✅ **5 Progressive Difficulty Levels** - Increasing complexity with more targets and shorter reaction times
-
-✅ **Real-time Feedback** - Visual effects for hits and misses
-
-✅ **Detailed Analytics** - Track accuracy, reaction time, and performance trends
-
-✅ **Star Rating System** - Motivating feedback on performance
-
-✅ **Smooth Animations** - Polished UI with grid backgrounds and visual transitions
-
-✅ **Mobile Friendly** - Responsive design that works on different screen sizes
-
-✅ **Dark Theme** - Easy on the eyes with cyberpunk aesthetic
-
-## 🎨 Visual Design
-
-- **Color Scheme**: Dark background with neon accents
-- **Target Design**: Multi-ring circular targets with pulsing animation
-- **HUD Display**: Real-time level, score, and timer information
-- **Effects**: Shot animations, hit feedback, smooth transitions
-
-## 🚀 Usage
+## 🚀 Integration (For Main System)
 
 ```tsx
-import TargetGhostGame from "./games/aimtrainer/TargetGhostGame";
+import TargetGhostGame from "./target-ghost/TargetGhostGame";
 
-// In your component
-<TargetGhostGame
-  playerId="user123"
-  sessionId="session456"
-  onGameComplete={(result) => {
-    console.log("Game complete:", result);
-  }}
-/>;
-```
+export default function App() {
+  const handleGameComplete = (result) => {
+    console.log("Saving to database...", result);
+  };
 
-### Props
-
-- `playerId` - Unique identifier for the player
-- `sessionId` - Session identifier for tracking
-- `onGameComplete` - Callback function when game ends, receives `GameResult`
-
-## 📝 Game Result Format
-
-```typescript
-{
-  gameId: string;
-  gameName: string;
-  playerId: string;
-  sessionId: string;
-  score: number;
-  accuracy: number;
-  reactionTimeMs?: number;
-  responseTimesMs: number[];
-  startedAt: string;
-  endedAt: string;
-  durationMs: number;
-  rawData: any;
+  return (
+    <TargetGhostGame
+      playerId="STUDENT_001"
+      sessionId="SESSION_XYZ"
+      onGameComplete={handleGameComplete}
+    />
+  );
 }
 ```
-
-## 🎮 Tips for High Scores
-
-1. **Memorize Carefully** - Pay attention to target positions during the memorize phase
-2. **Stay Focused** - Concentration is key during the shooting phase
-3. **Practice Levels** - Start with easier levels to build muscle memory
-4. **Click Accurately** - Aim for the center of the target for consistent hits
-5. **Track Progress** - Try to beat your previous scores and improve reaction times
-
-## 📱 Browser Support
-
-Works on all modern browsers with React 18+ support:
-
-- Chrome/Edge (latest)
-- Firefox (latest)
-- Safari (latest)
-
-## 🔧 Technical Stack
-
-- **React** - UI framework
-- **TypeScript** - Type safety
-- **CSS-in-JS** - Inline styles for components
-- **Hooks** - State and effect management
-
-## 📄 License
-
-Part of the Computer Skill training platform
-
----
-
-**Challenge yourself and become a Sharpshooter!** 🎯

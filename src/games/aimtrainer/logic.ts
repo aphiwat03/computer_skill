@@ -188,14 +188,14 @@ const initialState: GameState = {
  * - Manages timers for level duration
  * - Compiles final results when game ends
  *
- * @param user_id - Unique identifier for the player
+ * @param playerId - Unique identifier for the player
  * @param sessionId - Unique identifier for the gaming session
  * @param onGameComplete - Callback function when all levels are complete
  *
  * @returns Object with game state and all action handlers
  */
 export function useGame(
-  user_id: string,
+  playerId: string,
   sessionId: string,
   onGameComplete: (result: GameResult) => void,
 ) {
@@ -600,7 +600,7 @@ export function useGame(
       return {
         gameId: "target-ghost",
         gameName: "Target Ghost",
-        user_id,
+        playerId,
         sessionId,
         score: totalScore,
         accuracy:
@@ -626,7 +626,7 @@ export function useGame(
         },
       };
     },
-    [user_id, sessionId],
+    [playerId, sessionId],
   );
 
   /**

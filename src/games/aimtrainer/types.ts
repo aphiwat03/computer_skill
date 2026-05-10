@@ -60,7 +60,7 @@ export interface GameState {
 export interface GameResult {
   gameId: string;
   gameName: string;
-  user_id: string;
+  playerId: string;
   sessionId: string;
   score: number;
   accuracy: number;

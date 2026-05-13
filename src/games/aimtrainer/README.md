@@ -1,43 +1,42 @@
-# Target Ghost (Reaction Time & Aim Trainer)
+# Target Ghost (เกมฝึกการตอบสนอง, ความแม่นยำ และความนิ่ง)
 
-A high-intensity reaction time and aim training game built as a React Component. Designed to measure and improve player reflexes, mouse control (flicking), and precision.
+โมดูลเกมสำหรับฝึกและทดสอบปฏิกิริยาตอบสนอง (Reaction Time) และความแม่นยำในการเล็งเป้า (Aim) พัฒนาในรูปแบบ React Component ออกแบบมาเพื่อวัดและวิเคราะห์การตอบสนอง, การควบคุมเมาส์ (Flicking) และความสม่ำเสมอของสมาธิ (Stability) ของผู้เล่น
 
-## 📋 Overview
+## 🕹️ วิธีการเล่น (How to Play)
 
-Target Ghost is a plug-and-play game module. It does not connect to any database directly. Instead, it receives player session data via props and returns a standardized `GameResult` object back to the main system upon completion.
+1. **รอสัญญาณ:** เกมจะสุ่มสร้างเป้าหมายขึ้นมาบนหน้าจอ ให้รอจนกว่าเป้าหมายจะทำงาน (มีวงแหวนสีแดงสว่างขึ้น)
+2. **ตอบสนองให้ไว:** คลิกเป้าหมายที่ทำงานให้เร็วที่สุดเท่าที่จะทำได้
+3. **รักษาความแม่นยำ:** โฟกัสที่การยิงเฉพาะเป้าหมายที่ทำงานแล้วเท่านั้น การยิงพลาด (Miss) จะทำให้เปอร์เซ็นต์ความแม่นยำ (Accuracy) โดยรวมลดลง
+4. **เคลียร์ด่าน:** ยิงตามจำนวนเป้าหมายให้ครบทั้ง5ด่าน
 
-## 🎮 How to Play
+## 📊 ตัวชี้วัดประสิทธิภาพ (Performance Metrics Explained)
 
-1. **Wait for the Signal:** The game will spawn targets on the screen. Wait until a target activates (shows a red glowing ring).
-2. **React Quickly:** Click the activated target as fast as possible.
-3. **Don't Rush:** Clicking before a target activates (Early Click) or clicking on the background (Miss) will result in score penalties.
-4. **Clear Stages:** Survive the time limit across 5 progressive difficulty levels to clear the game.
+ระบบจะประเมินประสิทธิภาพของผู้เล่นใน 4 มิติหลัก ดังนี้:
 
-## 📈 Performance Metrics Explained
+1. **Avg Reaction Time (เวลาตอบสนองเฉลี่ย):** วัดปฏิกิริยาตอบสนองพื้นฐานของมนุษย์ คือระยะเวลาเฉลี่ยตั้งแต่เป้าหมาย **ทำงาน (เปลี่ยนเป็นสีแดง)** จนถึงตอนที่ผู้เล่นคลิกโดน
+2. **Avg Switch Time หรือ Flick (เวลาเปลี่ยนเป้าหมายเฉลี่ย):** วัดการควบคุมเมาส์และจังหวะ (Pace) คือระยะเวลาตั้งแต่ **ทำลายเป้าหมายก่อนหน้า** จนถึงตอนที่ทำลายเป้าหมายปัจจุบันสำเร็จ
+3. **Stability (ความนิ่ง/ความสม่ำเสมอ):** วัดสมาธิและความทนทานต่อความเหนื่อยล้า คำนวณจากค่าเบี่ยงเบนมาตรฐาน (Standard Deviation - SD) ของเวลาตอบสนอง หากค่าความแกว่ง **< 200ms** จะถือว่า **"Stable" (นิ่ง)** ซึ่งแสดงถึงความจำของกล้ามเนื้อ (Muscle Memory) ที่เสถียรและมีอาการหลุดโฟกัสที่น้อยมาก
+4. **Accuracy (ความแม่นยำ):** เปอร์เซ็นต์ของการยิงโดนเทียบกับจำนวนการยิงทั้งหมด
 
-The game evaluates two distinct types of speed:
+## 📈 ระดับความยาก (Difficulty Levels)
 
-1. **Avg Reaction Time:** Measures basic human reflex. The time taken from when a target **activates (turns red)** to when the player clicks it.
-2. **Avg Switch (Flick) Time:** Measures mouse control and muscle memory. The time taken from **destroying the previous target** to successfully destroying the current one (moving from point A to point B).
+| ด่าน | ชื่อระดับ    | จำนวนเป้าหมาย | เวลาจำกัด | เวลารอสัญญาณ (Interval) |
+| :--- | :----------- | :------------ | :-------- | :---------------------- |
+| 1    | Beginner     | 3             | 10s       | 3.0s                    |
+| 2    | Training     | 5             | 10s       | 2.5s                    |
+| 3    | Intermediate | 7             | 10s       | 2.0s                    |
+| 4    | Advanced     | 9             | 15s       | 1.8s                    |
+| 5    | Sharpshooter | 11            | 15s       | 1.5s                    |
 
-## 📊 Difficulty Levels
-
-| Level | Name         | Targets on Screen | Time Limit | Signal Interval |
-| :---- | :----------- | :---------------- | :--------- | :-------------- |
-| 1     | Beginner     | 3                 | 10s        | 3.0s            |
-| 2     | Training     | 5                 | 10s        | 2.5s            |
-| 3     | Intermediate | 7                 | 10s        | 2.0s            |
-| 4     | Advanced     | 9                 | 15s        | 1.8s            |
-| 5     | Sharpshooter | 11                | 15s        | 1.5s            |
-
-## 🚀 Integration (For Main System)
+## 🔌 การนำไปใช้งานร่วมกับระบบหลัก (Integration)
 
 ```tsx
 import TargetGhostGame from "./target-ghost/TargetGhostGame";
 
 export default function App() {
   const handleGameComplete = (result) => {
-    console.log("Saving to database...", result);
+    // result จะประกอบด้วย accuracy, reactionTimeMs, averageSwitchTimeMs และ rawData สำหรับทำ Heatmap
+    console.log("Saving metrics to database...", result);
   };
 
   return (

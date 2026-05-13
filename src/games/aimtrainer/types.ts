@@ -62,13 +62,12 @@ export interface GameResult {
   gameName: string;
   playerId: string;
   sessionId: string;
-  score: number;
   accuracy: number;
   reactionTimeMs?: number;
+  averageSwitchTimeMs?: number;
   responseTimesMs: number[];
   startedAt: string;
   endedAt: string;
-  durationMs: number;
   rawData: any;
 }
 

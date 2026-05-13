@@ -4,19 +4,10 @@ import { LEVELS, TARGET_HIT_RADIUS_PX } from "./types";
 
 // ==================== Game Constants ====================
 
-/** Delay before first target appears after level starts (milliseconds) */
 const INITIAL_SIGNAL_DELAY_MS = 3000;
-
-/** Radius of the hit detection area for targets (pixels) */
 const HIT_RADIUS_PX = TARGET_HIT_RADIUS_PX;
-
-/** Radius of center hit area (perfect aim) - 30% of hit radius */
 const CENTER_HIT_RADIUS_PX = HIT_RADIUS_PX * 0.3;
-
-/** Score penalty for clicking too early before target appears */
 const EARLY_CLICK_PENALTY = 150;
-
-/** Score penalty for missing a target */
 const MISS_PENALTY = 50;
 
 // ==================== Scoring Functions ====================
@@ -76,10 +67,8 @@ function generateTargets(count: number): Target[] {
   const targets: Target[] = [];
   const margin = 12;
   const attempts = 200;
-
   for (let i = 0; i < count; i++) {
     let placed = false;
-    // Try up to 200 times to find a valid position that doesn't overlap
     for (let a = 0; a < attempts; a++) {
       const x = margin + Math.random() * (100 - margin * 2);
       const y = margin + Math.random() * (100 - margin * 2);
@@ -200,14 +189,12 @@ export function useGame(
   onGameComplete: (result: GameResult) => void,
 ) {
   const [state, setState] = useState<GameState>(initialState);
-
-  // Refs to store data that persists across renders
-  const levelResultsRef = useRef<any[]>([]); // Stores results from completed levels
-  const initialStartTimeRef = useRef<string>(new Date().toISOString()); // Game start time
-  const signalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null); // Target activation timer
-  const shootingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null); // Level timeout timer
-  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null); // Remaining time countdown
-  const stateRef = useRef(state); // Reference to current state for use in callbacks
+  const levelResultsRef = useRef<any[]>([]);
+  const initialStartTimeRef = useRef<string>(new Date().toISOString());
+  const signalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const shootingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const stateRef = useRef(state);
   stateRef.current = state;
 
   /**
@@ -446,7 +433,7 @@ export function useGame(
                 currentReactionStart: Date.now(),
               };
             });
-          }, 400);
+          }, 200);
         } else if (!isEarlyClick) {
           scheduleNextSignal(config);
         }
@@ -560,9 +547,8 @@ export function useGame(
   const buildResult = useCallback(
     (finalState: GameState): GameResult => {
       const endedAt = new Date().toISOString();
-      const durationMs =
-        Date.now() - new Date(initialStartTimeRef.current).getTime();
-      const allResults =
+
+      const rawLevelResults =
         finalState.phase === "gameover"
           ? levelResultsRef.current
           : [
@@ -570,61 +556,64 @@ export function useGame(
               {
                 level: finalState.currentLevel,
                 shots: finalState.shots,
-                score: finalState.score,
                 hitCount: finalState.hitCount,
                 missCount: finalState.missCount,
-                centerHitCount: finalState.centerHitCount,
-                earlyClickCount: finalState.earlyClickCount,
               },
             ];
 
-      const allShots = allResults.flatMap((r) => r.shots);
-      const totalHits = allResults.reduce((sum, r) => sum + r.hitCount, 0);
-      const totalMisses = allResults.reduce((sum, r) => sum + r.missCount, 0);
-      const totalCenterHits = allResults.reduce(
-        (sum, r) => sum + (r.centerHitCount ?? 0),
-        0,
-      );
-      const totalEarlyClicks = allResults.reduce(
-        (sum, r) => sum + (r.earlyClickCount ?? 0),
-        0,
-      );
-      const totalScore = finalState.score;
+      const processedLevelResults = rawLevelResults.map((level) => {
+        const levelHits = level.shots.filter((s: any) => s.hit);
+        const levelReactionTimes = levelHits.map(
+          (s: any) => s.reactionTime ?? 0,
+        );
+        const levelSD = Math.round(getStandardDeviation(levelReactionTimes));
+
+        return {
+          level: level.level,
+          hitCount: level.hitCount,
+          missCount: level.missCount,
+          consistencyMs: levelSD,
+          stabilityStatus: levelSD > 200 ? "Unstable" : "Stable",
+          shots: level.shots.map((s: any) => ({
+            x: s.x,
+            y: s.y,
+            hit: s.hit,
+            reactionTime: s.reactionTime,
+            switchTime: s.switchTime,
+          })),
+        };
+      });
+
+      const allShots = rawLevelResults.flatMap((r) => r.shots);
       const hits = allShots.filter((s) => s.hit);
       const reactionTimes = hits.map((s) => s.reactionTime ?? 0);
       const switchTimes = hits
         .map((s) => s.switchTime)
-        .filter((time): time is number => typeof time === "number");
-      const consistencyMs = Math.round(getStandardDeviation(reactionTimes));
+        .filter((t): t is number => typeof t === "number");
 
       return {
         gameId: "target-ghost",
         gameName: "Target Ghost",
         playerId,
         sessionId,
-        score: totalScore,
         accuracy:
           allShots.length > 0 ? (hits.length / allShots.length) * 100 : 0,
-        reactionTimeMs:
+        averagereactionTimeMs:
           reactionTimes.length > 0 ? Math.round(getAverage(reactionTimes)) : 0,
+        averageSwitchTimeMs:
+          switchTimes.length > 0 ? Math.round(getAverage(switchTimes)) : 0,
         responseTimesMs: reactionTimes,
         startedAt: initialStartTimeRef.current,
         endedAt,
-        durationMs,
         rawData: {
           finalLevel: finalState.currentLevel,
           levelComplete: finalState.levelComplete,
-          hitCount: totalHits,
-          missCount: totalMisses,
-          centerHitCount: totalCenterHits,
-          earlyClickCount: totalEarlyClicks,
-          averageSwitchTimeMs:
-            switchTimes.length > 0 ? Math.round(getAverage(switchTimes)) : 0,
-          consistencyMs,
-          shots: allShots,
-          levelResults: allResults,
+          hitCount: hits.length,
+          missCount: allShots.length - hits.length,
+          globalConsistencyMs: Math.round(getStandardDeviation(reactionTimes)),
+          levelResults: processedLevelResults, // ข้อมูลที่ Clean แล้วจะอยู่ในนี้ครับ
         },
-      };
+      } as any;
     },
     [playerId, sessionId],
   );

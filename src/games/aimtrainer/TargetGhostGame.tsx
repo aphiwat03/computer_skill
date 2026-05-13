@@ -259,9 +259,7 @@ function MenuScreen({ onStart }: MenuScreenProps) {
  * - Timer color changes based on urgency (green > yellow > red)
  */
 function HUD({ phase, level, timeLeft, totalTime }: HUDProps) {
-  // Calculate percentage for timer bar progress
   const pct = totalTime > 0 ? (timeLeft / totalTime) * 100 : 100;
-  // Change timer color based on time remaining
   const timeColor = pct > 50 ? "#00ffaa" : pct > 25 ? "#ffaa00" : "#ff4444";
   const secs = (timeLeft / 1000).toFixed(1);
 
@@ -561,6 +559,21 @@ function ResultScreen({
       ? Math.min(...hitShots.map((s) => s.reactionTime || 9999))
       : 0;
 
+  // Calculate SD
+  const reactionTimes = hitShots
+    .map((s) => s.reactionTime || 0)
+    .filter((t) => t > 0);
+  const avg =
+    reactionTimes.length > 0
+      ? reactionTimes.reduce((a, b) => a + b, 0) / reactionTimes.length
+      : 0;
+  const variance =
+    reactionTimes.length > 0
+      ? reactionTimes.reduce((sum, val) => sum + Math.pow(val - avg, 2), 0) /
+        reactionTimes.length
+      : 0;
+  const sd = Math.sqrt(variance);
+
   const s: Record<string, CSSProperties> = {
     wrap: {
       width: "100vw",
@@ -661,9 +674,6 @@ function ResultScreen({
     <div style={s.wrap}>
       <div style={s.bgGrid} />
       <div style={s.inner}>
-        <div style={s.badge}>LEVEL {level} — TRAINING</div>
-
-        {/* แทนที่ระบบเรตติ้งด้วยหัวข้อเรียบๆ */}
         <h2 style={s.title}>PERFORMANCE METRICS</h2>
 
         <div style={s.statsGrid}>
@@ -681,10 +691,10 @@ function ResultScreen({
               color: "#00ccff",
             },
             {
-              icon: "🏆",
-              val: bestTime > 0 ? `${bestTime}ms` : "—",
-              label: "FASTEST REACTION",
-              color: "#00ffaa",
+              icon: sd > 150 ? "⚠️" : "🎯",
+              val: sd > 150 ? "UNSTABLE" : "STABLE",
+              label: `STABILITY `,
+              color: sd > 150 ? "#ff3d6b" : "#00ffaa",
             },
             {
               icon: "⚡",
@@ -708,12 +718,7 @@ function ResultScreen({
               }}
             >
               <div style={{ fontSize: 24, marginBottom: 4 }}>{item.icon}</div>
-              <div
-                style={{
-                  ...s.statVal,
-                  ...(item.color ? { color: item.color } : { color: "#fff" }),
-                }}
-              >
+              <div style={{ ...s.statVal, color: item.color || "#fff" }}>
                 {item.val}
               </div>
               <div style={s.statLabel}>{item.label}</div>
@@ -721,33 +726,18 @@ function ResultScreen({
           ))}
         </div>
 
-        {/* Action buttons */}
         <div style={s.actions}>
-          {isLastLevel ? (
-            <button
-              style={{
-                ...s.btn,
-                background: "rgba(255,204,0,0.15)",
-                borderColor: "rgba(255,204,0,0.5)",
-                color: "#ffcc00",
-              }}
-              onClick={onNext}
-            >
-              VIEW FINAL RESULTS →
-            </button>
-          ) : (
-            <button
-              style={{
-                ...s.btn,
-                background: "rgba(255,68,68,0.15)",
-                borderColor: "rgba(255,68,68,0.5)",
-                color: "#ff6666",
-              }}
-              onClick={onNext}
-            >
-              NEXT STAGE →
-            </button>
-          )}
+          <button
+            style={{
+              ...s.btn,
+              background: "rgba(255,68,68,0.15)",
+              borderColor: "rgba(255,68,68,0.5)",
+              color: "#ff6666",
+            }}
+            onClick={onNext}
+          >
+            {isLastLevel ? "VIEW FINAL RESULTS →" : "NEXT STAGE →"}
+          </button>
           <button
             style={{
               ...s.btn,
@@ -820,18 +810,15 @@ function GameCanvas(props: GameCanvasProps) {
       if (clickedTarget && clickedTarget.id === state.activeTargetId) {
         hit = true;
       }
-
-      // Play audio feedback
       playBeep(hit);
 
       // Add shot effect animation (will auto-remove after 600ms)
       setShotEffects((prev) => [...prev, { id, x, y, hit }]);
       setTimeout(
         () => setShotEffects((prev) => prev.filter((e) => e.id !== id)),
-        600,
+        400,
       );
 
-      // Pass shot to game logic
       const arenaSize = {
         width: rect.width,
         height: rect.height,

@@ -6,7 +6,12 @@ import {
   type CSSProperties,
 } from "react";
 import { useGame } from "./logic";
-import { LEVELS } from "./types";
+import {
+  DEFAULT_TARGET_DISTANCE_PERCENT,
+  LEVELS,
+  MAX_TARGET_DISTANCE_PERCENT,
+  MIN_TARGET_DISTANCE_PERCENT,
+} from "./types";
 import type { GameResult, GamePhase, LevelConfig, Shot } from "./types";
 
 // ==================== Types & Interfaces ====================
@@ -22,6 +27,8 @@ interface ShotEffect {
 /** Props for MenuScreen component */
 interface MenuScreenProps {
   onStart: (level: number) => void;
+  targetDistance: number;
+  onTargetDistanceChange: (distance: number) => void;
 }
 
 /** Props for HUD (heads-up display) component */
@@ -38,6 +45,7 @@ interface GameOverScreenProps {
   accuracy: number;
   avgReaction: number;
   avgSwitch: number;
+  avgConsistencyMs: number;
   currentLevel: number;
   onMenu: () => void;
   cleared: boolean;
@@ -116,13 +124,47 @@ const playBeep = (isHit: boolean) => {
   }
 };
 
+const clampTargetDistance = (distance: number) => {
+  if (!Number.isFinite(distance)) return DEFAULT_TARGET_DISTANCE_PERCENT;
+  return Math.min(
+    MAX_TARGET_DISTANCE_PERCENT,
+    Math.max(MIN_TARGET_DISTANCE_PERCENT, distance),
+  );
+};
+
+const getMiddleStatShots = (shots: Shot[]) =>
+  shots.length > 2 ? shots.slice(1, -1) : [];
+
+const getStatHits = (shots: Shot[]) =>
+  getMiddleStatShots(shots).filter((shot) => shot.hit);
+
+const getReactionTimesForStats = (shots: Shot[]) =>
+  getStatHits(shots)
+    .map((shot) => shot.reactionTime)
+    .filter((time): time is number => typeof time === "number" && time > 0);
+
+const getSwitchTimesForStats = (shots: Shot[]) =>
+  getStatHits(shots)
+    .map((shot) => shot.switchTime)
+    .filter((time): time is number => typeof time === "number" && time > 0);
+
 // ==================== MenuScreen Component ====================
 
 /**
  * Main menu screen displayed at game start
  * Shows game title and instructions, with click to start functionality
  */
-function MenuScreen({ onStart }: MenuScreenProps) {
+function MenuScreen({
+  onStart,
+  targetDistance,
+  onTargetDistanceChange,
+}: MenuScreenProps) {
+  const handleDistanceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    onTargetDistanceChange(clampTargetDistance(Number(e.target.value)));
+  };
+
+  const handleStart = () => onStart(1);
+
   // Define all inline styles for the menu
   const styles: Record<string, CSSProperties> = {
     menu: {
@@ -211,13 +253,49 @@ function MenuScreen({ onStart }: MenuScreenProps) {
       color: "rgba(255,255,255,0.5)",
       letterSpacing: 3,
     },
+    adminPanel: {
+      display: "flex",
+      alignItems: "center",
+      gap: 12,
+      background: "rgba(255,255,255,0.03)",
+      border: "1px solid rgba(255,255,255,0.1)",
+      borderRadius: 4,
+      padding: "12px 16px",
+    },
+    adminLabel: {
+      fontSize: 12,
+      color: "rgba(255,255,255,0.45)",
+      letterSpacing: 2,
+      textTransform: "uppercase",
+      fontWeight: 700,
+      whiteSpace: "nowrap",
+    },
+    distanceInput: {
+      width: 88,
+      background: "rgba(0,0,0,0.55)",
+      color: "#00ffaa",
+      border: "1px solid rgba(0,255,170,0.35)",
+      borderRadius: 3,
+      padding: "9px 10px",
+      fontFamily: '"Rajdhani", monospace',
+      fontSize: 20,
+      fontWeight: 800,
+      textAlign: "center",
+    },
+    distanceSuffix: {
+      color: "rgba(255,255,255,0.35)",
+      fontSize: 12,
+      letterSpacing: 1,
+      whiteSpace: "nowrap",
+    },
   };
 
   return (
     <div
-      style={{ ...styles.menu, cursor: "pointer" }}
-      onClick={() => onStart(1)}
-      onKeyDown={() => onStart(1)}
+      style={styles.menu}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") handleStart();
+      }}
       tabIndex={0}
     >
       <style>{`
@@ -245,6 +323,27 @@ function MenuScreen({ onStart }: MenuScreenProps) {
             Press any button to test.
           </p>
         </div>
+        <div style={styles.adminPanel}>
+          <label htmlFor="target-distance" style={styles.adminLabel}>
+            Target Distance
+          </label>
+          <input
+            id="target-distance"
+            type="number"
+            min={MIN_TARGET_DISTANCE_PERCENT}
+            max={MAX_TARGET_DISTANCE_PERCENT}
+            step={1}
+            value={targetDistance}
+            onChange={handleDistanceChange}
+            onClick={(e) => e.stopPropagation()}
+            style={styles.distanceInput}
+          />
+          <span style={styles.distanceSuffix}>% of arena</span>
+        </div>
+        <button style={styles.startBtn} onClick={handleStart}>
+          <span style={styles.startText}>Start</span>
+          <span style={styles.startSubtext}>Level 1</span>
+        </button>
       </div>
     </div>
   );
@@ -395,6 +494,7 @@ function GameOverScreen({
   accuracy,
   avgReaction,
   avgSwitch,
+  avgConsistencyMs,
   onMenu,
 }: GameOverScreenProps) {
   // Define styles for game over screen
@@ -500,6 +600,18 @@ function GameOverScreen({
             <span style={s.slabel}>OVERALL ACCURACY</span>
             <span style={{ ...s.sval, color: "#eeecec" }}>{accuracy}%</span>
           </div>
+          <div
+            style={{
+              ...s.stat,
+              border: "1px solid rgba(0,255,170,0.35)",
+              boxShadow: "0 0 22px rgba(0,255,170,0.08)",
+            }}
+          >
+            <span style={s.slabel}>AVG CONSISTENCY</span>
+            <span style={{ ...s.sval, color: "#00ffaa" }}>
+              {avgConsistencyMs > 0 ? `${avgConsistencyMs}ms` : "0 ms"}
+            </span>
+          </div>
           <div style={s.stat}>
             <span style={s.slabel}>AVG SWITCH (FLICK)</span>
             <span style={{ ...s.sval, color: "#00ccff" }}>
@@ -552,17 +664,9 @@ function ResultScreen({
   // Calculate accuracy percentage
   const accuracy =
     shots.length > 0 ? Math.round((hitCount / shots.length) * 100) : 0;
-  // Find best (fastest) reaction time among successful hits
-  const hitShots = shots.filter((s) => s.hit);
-  const bestTime =
-    hitShots.length > 0
-      ? Math.min(...hitShots.map((s) => s.reactionTime || 9999))
-      : 0;
 
-  // Calculate SD
-  const reactionTimes = hitShots
-    .map((s) => s.reactionTime || 0)
-    .filter((t) => t > 0);
+  // Calculate SD from middle shots only
+  const reactionTimes = getReactionTimesForStats(shots);
   const avg =
     reactionTimes.length > 0
       ? reactionTimes.reduce((a, b) => a + b, 0) / reactionTimes.length
@@ -674,7 +778,7 @@ function ResultScreen({
     <div style={s.wrap}>
       <div style={s.bgGrid} />
       <div style={s.inner}>
-        <h2 style={s.title}>PERFORMANCE METRICS</h2>
+        <h2 style={s.title}>STAGE {level} METRICS</h2>
 
         <div style={s.statsGrid}>
           {[
@@ -763,6 +867,9 @@ function ResultScreen({
  * Routes between menu, shooting, result, and gameover screens
  */
 function GameCanvas(props: GameCanvasProps) {
+  const [targetDistance, setTargetDistance] = useState(
+    DEFAULT_TARGET_DISTANCE_PERCENT,
+  );
   // Get all game functions and state from the useGame hook
   const {
     state,
@@ -771,7 +878,12 @@ function GameCanvas(props: GameCanvasProps) {
     handleShoot,
     nextLevel,
     submitAndExit,
-  } = useGame(props.playerId, props.sessionId, props.onGameComplete);
+  } = useGame(
+    props.playerId,
+    props.sessionId,
+    props.onGameComplete,
+    targetDistance,
+  );
   const arenaRef = useRef<HTMLDivElement>(null);
 
   // Track temporary shot effects (hit/miss animations)
@@ -845,17 +957,27 @@ function GameCanvas(props: GameCanvasProps) {
   }, [isShooting]);
 
   // Route to different screen based on game phase
-  if (state.phase === "menu") return <MenuScreen onStart={startLevel} />;
+  if (state.phase === "menu") {
+    return (
+      <MenuScreen
+        onStart={startLevel}
+        targetDistance={targetDistance}
+        onTargetDistanceChange={setTargetDistance}
+      />
+    );
+  }
 
   if (state.phase === "gameover") {
     const finalAccuracy = state.finalStats?.accuracy || 0;
     const finalReaction = state.finalStats?.avgReaction || 0;
     const finalSwitch = state.finalStats?.avgSwitch || 0;
+    const finalConsistency = state.finalStats?.avgConsistencyMs || 0;
     return (
       <GameOverScreen
         accuracy={finalAccuracy}
         avgReaction={finalReaction}
         avgSwitch={finalSwitch}
+        avgConsistencyMs={finalConsistency}
         currentLevel={state.currentLevel}
         onMenu={submitAndExit}
         cleared={state.levelComplete}
@@ -865,14 +987,13 @@ function GameCanvas(props: GameCanvasProps) {
 
   // Calculate statistics for result screen
   if (state.phase === "result") {
-    const hits = state.shots.filter((s) => s.hit);
-    const switchTimes = hits
-      .map((s) => s.switchTime)
-      .filter((time): time is number => typeof time === "number");
+    const reactionTimes = getReactionTimesForStats(state.shots);
+    const switchTimes = getSwitchTimesForStats(state.shots);
     const avgReaction =
-      hits.length > 0
+      reactionTimes.length > 0
         ? Math.round(
-            hits.reduce((a, s) => a + (s.reactionTime || 0), 0) / hits.length,
+            reactionTimes.reduce((a, time) => a + time, 0) /
+              reactionTimes.length,
           )
         : 0;
     const avgSwitch =

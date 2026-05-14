@@ -49,11 +49,13 @@ export interface GameState {
   levelComplete: boolean;
   totalTime: number;
   shootingTimeLeft: number;
+  shootingTimerStarted: boolean;
   startedAt: string;
   finalStats?: {
     accuracy: number;
     avgReaction: number;
     avgSwitch: number;
+    avgConsistencyMs: number;
   };
 }
 
@@ -65,6 +67,7 @@ export interface GameResult {
   accuracy: number;
   reactionTimeMs?: number;
   averageSwitchTimeMs?: number;
+  avgConsistencyMs: number;
   responseTimesMs: number[];
   startedAt: string;
   endedAt: string;
@@ -73,39 +76,42 @@ export interface GameResult {
 
 export const TARGET_SIZE_PX = 64;
 export const TARGET_HIT_RADIUS_PX = TARGET_SIZE_PX / 2;
+export const DEFAULT_TARGET_DISTANCE_PERCENT = 24;
+export const MIN_TARGET_DISTANCE_PERCENT = 5;
+export const MAX_TARGET_DISTANCE_PERCENT = 50;
 
 export const LEVELS: LevelConfig[] = [
   {
     level: 1,
-    targetCount: 3,
+    targetCount: 5,
     shootingTime: 10000,
     signalInterval: 3000,
     label: "Beginner",
   },
   {
     level: 2,
-    targetCount: 5,
+    targetCount: 8,
     shootingTime: 10000,
     signalInterval: 2500,
     label: "Training",
   },
   {
     level: 3,
-    targetCount: 7,
+    targetCount: 11,
     shootingTime: 10000,
     signalInterval: 2000,
     label: "Intermediate",
   },
   {
     level: 4,
-    targetCount: 9,
+    targetCount: 14,
     shootingTime: 15000,
     signalInterval: 1800,
     label: "Advanced",
   },
   {
     level: 5,
-    targetCount: 11,
+    targetCount: 17,
     shootingTime: 15000,
     signalInterval: 1500,
     label: "Sharpshooter",

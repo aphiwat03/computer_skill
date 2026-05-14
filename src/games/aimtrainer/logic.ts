@@ -1,6 +1,12 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import type { GameState, Target, Shot, LevelConfig, GameResult } from "./types";
-import { LEVELS, TARGET_HIT_RADIUS_PX } from "./types";
+import {
+  DEFAULT_TARGET_DISTANCE_PERCENT,
+  LEVELS,
+  MAX_TARGET_DISTANCE_PERCENT,
+  MIN_TARGET_DISTANCE_PERCENT,
+  TARGET_HIT_RADIUS_PX,
+} from "./types";
 
 // ==================== Game Constants ====================
 
@@ -9,6 +15,8 @@ const HIT_RADIUS_PX = TARGET_HIT_RADIUS_PX;
 const CENTER_HIT_RADIUS_PX = HIT_RADIUS_PX * 0.3;
 const EARLY_CLICK_PENALTY = 150;
 const MISS_PENALTY = 50;
+const SPAWN_MARGIN_PERCENT = 12;
+const FIXED_DISTANCE_ATTEMPTS = 300;
 
 // ==================== Scoring Functions ====================
 
@@ -53,62 +61,114 @@ function getStandardDeviation(values: number[]) {
   return Math.sqrt(variance);
 }
 
+function getMiddleStatShots(shots: Shot[]) {
+  return shots.length > 2 ? shots.slice(1, -1) : [];
+}
+
+function getStatHits(shots: Shot[]) {
+  return getMiddleStatShots(shots).filter((shot) => shot.hit);
+}
+
+function getReactionTimesForStats(shots: Shot[]) {
+  return getStatHits(shots)
+    .map((shot) => shot.reactionTime)
+    .filter((time): time is number => typeof time === "number" && time > 0);
+}
+
+function getSwitchTimesForStats(shots: Shot[]) {
+  return getStatHits(shots)
+    .map((shot) => shot.switchTime)
+    .filter((time): time is number => typeof time === "number" && time > 0);
+}
+
+function clampTargetDistance(distance: number) {
+  if (!Number.isFinite(distance)) return DEFAULT_TARGET_DISTANCE_PERCENT;
+  return Math.min(
+    MAX_TARGET_DISTANCE_PERCENT,
+    Math.max(MIN_TARGET_DISTANCE_PERCENT, distance),
+  );
+}
+
 // ==================== Target Management Functions ====================
 
-/**
- * Generates an array of targets with random positions
- * Ensures targets don't overlap too closely (minimum 18 units apart)
- * Uses margin of 12 units from arena edges
- *
- * @param count - Number of targets to generate
- * @returns Array of Target objects positioned randomly
- */
-function generateTargets(count: number): Target[] {
-  const targets: Target[] = [];
-  const margin = 12;
-  const attempts = 200;
-  for (let i = 0; i < count; i++) {
-    let placed = false;
-    for (let a = 0; a < attempts; a++) {
-      const x = margin + Math.random() * (100 - margin * 2);
-      const y = margin + Math.random() * (100 - margin * 2);
-      // Check if too close to existing targets
-      const tooClose = targets.some((t) => {
-        const dx = t.x - x;
-        const dy = t.y - y;
-        return Math.sqrt(dx * dx + dy * dy) < 18;
-      });
-      if (!tooClose) {
-        targets.push({ id: i, x, y, isActive: false, isHit: false });
-        placed = true;
-        break;
-      }
-    }
-    // If no valid position found after attempts, place anyway (with potential overlap)
-    if (!placed) {
-      targets.push({
-        id: i,
-        x: margin + Math.random() * (100 - margin * 2),
-        y: margin + Math.random() * (100 - margin * 2),
-        isActive: false,
-        isHit: false,
-      });
+function randomBoundedCoordinate() {
+  return (
+    SPAWN_MARGIN_PERCENT + Math.random() * (100 - SPAWN_MARGIN_PERCENT * 2)
+  );
+}
+
+function isWithinSpawnBounds(x: number, y: number) {
+  return (
+    x >= SPAWN_MARGIN_PERCENT &&
+    x <= 100 - SPAWN_MARGIN_PERCENT &&
+    y >= SPAWN_MARGIN_PERCENT &&
+    y <= 100 - SPAWN_MARGIN_PERCENT
+  );
+}
+
+function getFixedDistancePoint(previous: Target, distance: number) {
+  for (let attempt = 0; attempt < FIXED_DISTANCE_ATTEMPTS; attempt++) {
+    const angle = Math.random() * Math.PI * 2;
+    const x = previous.x + Math.cos(angle) * distance;
+    const y = previous.y + Math.sin(angle) * distance;
+
+    if (isWithinSpawnBounds(x, y)) {
+      return { x, y };
     }
   }
+
+  const scanSteps = 1440;
+  for (let step = 0; step < scanSteps; step++) {
+    const angle = (step / scanSteps) * Math.PI * 2;
+    const x = previous.x + Math.cos(angle) * distance;
+    const y = previous.y + Math.sin(angle) * distance;
+
+    if (isWithinSpawnBounds(x, y)) {
+      return { x, y };
+    }
+  }
+
+  throw new Error("Unable to place fixed-distance target within bounds.");
+}
+
+/**
+ * Generates targets as a fixed-distance path. The first target is random
+ * within safe bounds; each later target is exactly targetDistance from the
+ * previous target, with only the angle randomized.
+ */
+function generateTargets(count: number, targetDistance: number): Target[] {
+  const distance = clampTargetDistance(targetDistance);
+  const firstTarget: Target = {
+    id: 0,
+    x: randomBoundedCoordinate(),
+    y: randomBoundedCoordinate(),
+    isActive: false,
+    isHit: false,
+  };
+  const targets: Target[] = [firstTarget];
+
+  for (let i = 1; i < count; i++) {
+    const previousTarget = targets[i - 1];
+    const position = getFixedDistancePoint(previousTarget, distance);
+    targets.push({
+      id: i,
+      x: position.x,
+      y: position.y,
+      isActive: false,
+      isHit: false,
+    });
+  }
+
   return targets;
 }
 
 /**
- * Randomly activates one of the unhit targets
- * Records the activation time for reaction time calculation
- *
- * @param targets - Array of all targets
- * @returns Object containing updated targets, active target ID, and reaction start time
+ * Activates targets in generated order so every visible transition follows
+ * the fixed-distance path.
  */
-function activateRandomTarget(targets: Target[]) {
-  // Filter out already hit targets
-  const unhitTargets = targets.filter((t) => !t.isHit);
-  if (unhitTargets.length === 0) {
+function activateNextTarget(targets: Target[]) {
+  const activeTarget = targets.find((target) => !target.isHit);
+  if (!activeTarget) {
     return {
       targets,
       activeTargetId: null,
@@ -116,16 +176,14 @@ function activateRandomTarget(targets: Target[]) {
     };
   }
 
-  // Pick a random unhit target
-  const activeTarget =
-    unhitTargets[Math.floor(Math.random() * unhitTargets.length)];
   const activatedAt = Date.now();
 
   return {
-    targets: targets.map((t) => ({
-      ...t,
-      isActive: t.id === activeTarget.id,
-      activatedAt: t.id === activeTarget.id ? activatedAt : t.activatedAt,
+    targets: targets.map((target) => ({
+      ...target,
+      isActive: target.id === activeTarget.id,
+      activatedAt:
+        target.id === activeTarget.id ? activatedAt : target.activatedAt,
     })),
     activeTargetId: activeTarget.id,
     currentReactionStart: activatedAt,
@@ -162,7 +220,13 @@ const initialState: GameState = {
   startedAt: "",
   totalTime: 0,
   shootingTimeLeft: 0,
-  finalStats: { accuracy: 0, avgReaction: 0, avgSwitch: 0 },
+  shootingTimerStarted: false,
+  finalStats: {
+    accuracy: 0,
+    avgReaction: 0,
+    avgSwitch: 0,
+    avgConsistencyMs: 0,
+  },
 };
 
 // ==================== Main Game Logic Hook ====================
@@ -187,6 +251,7 @@ export function useGame(
   playerId: string,
   sessionId: string,
   onGameComplete: (result: GameResult) => void,
+  targetDistancePercent = DEFAULT_TARGET_DISTANCE_PERCENT,
 ) {
   const [state, setState] = useState<GameState>(initialState);
   const levelResultsRef = useRef<any[]>([]);
@@ -210,6 +275,36 @@ export function useGame(
     countdownRef.current = null;
   }, []);
 
+  const startShootingTimer = useCallback(
+    (shootingTime: number) => {
+      if (shootingTimerRef.current) clearTimeout(shootingTimerRef.current);
+      if (countdownRef.current) clearInterval(countdownRef.current);
+
+      countdownRef.current = setInterval(() => {
+        setState((prev) => {
+          if (prev.phase !== "shooting" || !prev.shootingTimerStarted) {
+            return prev;
+          }
+          const next = prev.shootingTimeLeft - 100;
+          if (next <= 0) {
+            return { ...prev, shootingTimeLeft: 0 };
+          }
+          return { ...prev, shootingTimeLeft: next };
+        });
+      }, 100);
+
+      shootingTimerRef.current = setTimeout(() => {
+        clearAllTimers();
+        setState((prev) => ({
+          ...prev,
+          phase: "result",
+          shootingTimeLeft: 0,
+        }));
+      }, shootingTime);
+    },
+    [clearAllTimers],
+  );
+
   /**
    * Gets the configuration for a specific level
    * Returns level config with target count, shooting time, signal interval, etc.
@@ -219,8 +314,7 @@ export function useGame(
   }, []);
 
   /**
-   * Schedules the next target to appear after signal interval
-   * Called after a hit to introduce a delay before next target
+   * Schedules the next target activation after the signal interval.
    */
   const scheduleNextSignal = useCallback((levelConfig: LevelConfig) => {
     if (signalTimerRef.current) clearTimeout(signalTimerRef.current);
@@ -228,7 +322,7 @@ export function useGame(
     signalTimerRef.current = setTimeout(() => {
       setState((prev) => {
         if (prev.phase !== "shooting") return prev;
-        const nextSignal = activateRandomTarget(prev.targets);
+        const nextSignal = activateNextTarget(prev.targets);
         if (nextSignal.activeTargetId === null) return prev;
         return {
           ...prev,
@@ -251,7 +345,10 @@ export function useGame(
     (level: number) => {
       clearAllTimers();
       const config = getLevelConfig(level);
-      const targets = generateTargets(config.targetCount);
+      const targets = generateTargets(
+        config.targetCount,
+        targetDistancePercent,
+      );
 
       // Use initial game time for first level, current time for subsequent levels
       const startedAtTime =
@@ -275,6 +372,7 @@ export function useGame(
         lastHitAt: null,
         levelComplete: false,
         shootingTimeLeft: config.shootingTime,
+        shootingTimerStarted: false,
       }));
 
       // Wait before showing first target
@@ -283,7 +381,7 @@ export function useGame(
           if (prev.phase !== "shooting" || prev.currentLevel !== level) {
             return prev;
           }
-          const firstSignal = activateRandomTarget(prev.targets);
+          const firstSignal = activateNextTarget(prev.targets);
           return {
             ...prev,
             targets: firstSignal.targets,
@@ -291,29 +389,9 @@ export function useGame(
             currentReactionStart: firstSignal.currentReactionStart,
           };
         });
-
-        countdownRef.current = setInterval(() => {
-          setState((prev) => {
-            if (prev.phase !== "shooting") return prev;
-            const next = prev.shootingTimeLeft - 100;
-            if (next <= 0) {
-              return { ...prev, shootingTimeLeft: 0 };
-            }
-            return { ...prev, shootingTimeLeft: next };
-          });
-        }, 100);
-
-        shootingTimerRef.current = setTimeout(() => {
-          clearAllTimers();
-          setState((prev) => ({
-            ...prev,
-            phase: "result",
-            shootingTimeLeft: 0,
-          }));
-        }, config.shootingTime);
       }, INITIAL_SIGNAL_DELAY_MS);
     },
-    [clearAllTimers, getLevelConfig],
+    [clearAllTimers, getLevelConfig, targetDistancePercent],
   );
 
   /**
@@ -411,35 +489,35 @@ export function useGame(
           newActiveId = null;
           newReactionStart = null;
           newLastHitAt = now;
-
-          if (signalTimerRef.current) clearTimeout(signalTimerRef.current);
-          signalTimerRef.current = setTimeout(() => {
-            setState((s) => {
-              if (s.phase !== "shooting") return s;
-              const unhit = s.targets.filter((t) => !t.isHit);
-              if (unhit.length === 0) {
-                clearAllTimers();
-                return { ...s, phase: "result", activeTargetId: null };
-              }
-              const rand = unhit[Math.floor(Math.random() * unhit.length)];
-              return {
-                ...s,
-                targets: s.targets.map((t) => ({
-                  ...t,
-                  isActive: t.id === rand.id,
-                  activatedAt: t.id === rand.id ? Date.now() : t.activatedAt,
-                })),
-                activeTargetId: rand.id,
-                currentReactionStart: Date.now(),
-              };
-            });
-          }, 200);
         } else if (!isEarlyClick) {
           scheduleNextSignal(config);
         }
 
         const allHit = updatedTargets.every((t) => t.isHit);
-        if (allHit) clearAllTimers();
+        const shouldStartShootingTimer = hit && !prev.shootingTimerStarted;
+
+        if (allHit) {
+          clearAllTimers();
+        } else if (hit) {
+          if (shouldStartShootingTimer) startShootingTimer(config.shootingTime);
+          if (signalTimerRef.current) clearTimeout(signalTimerRef.current);
+          signalTimerRef.current = setTimeout(() => {
+            setState((s) => {
+              if (s.phase !== "shooting") return s;
+              const nextTarget = activateNextTarget(s.targets);
+              if (nextTarget.activeTargetId === null) {
+                clearAllTimers();
+                return { ...s, phase: "result", activeTargetId: null };
+              }
+              return {
+                ...s,
+                targets: nextTarget.targets,
+                activeTargetId: nextTarget.activeTargetId,
+                currentReactionStart: nextTarget.currentReactionStart,
+              };
+            });
+          }, 200);
+        }
 
         return {
           ...prev,
@@ -456,12 +534,14 @@ export function useGame(
           missCount: hit ? prev.missCount : prev.missCount + 1,
           currentReactionStart: newReactionStart,
           lastHitAt: newLastHitAt,
+          shootingTimerStarted:
+            shouldStartShootingTimer || prev.shootingTimerStarted,
           phase: allHit ? "result" : prev.phase,
           score: Math.max(0, prev.score + scoreDelta),
         };
       });
     },
-    [getLevelConfig, scheduleNextSignal, clearAllTimers],
+    [getLevelConfig, scheduleNextSignal, clearAllTimers, startShootingTimer],
   );
 
   /**
@@ -491,9 +571,9 @@ export function useGame(
           ? Math.round((hits.length / allShots.length) * 100)
           : 0;
 
-      const reactionTimes = hits
-        .map((s) => s.reactionTime ?? 0)
-        .filter((t) => t > 0);
+      const reactionTimes = allResults.flatMap((result) =>
+        getReactionTimesForStats(result.shots || []),
+      );
       const avgReaction =
         reactionTimes.length > 0
           ? Math.round(
@@ -501,21 +581,25 @@ export function useGame(
             )
           : 0;
 
-      const switchTimes = hits
-        .map((s) => s.switchTime)
-        .filter((time): time is number => typeof time === "number");
+      const switchTimes = allResults.flatMap((result) =>
+        getSwitchTimesForStats(result.shots || []),
+      );
       const avgSwitch =
         switchTimes.length > 0
           ? Math.round(
               switchTimes.reduce((a, b) => a + b, 0) / switchTimes.length,
             )
           : 0;
+      const avgConsistencyMs =
+        reactionTimes.length > 0
+          ? Math.round(getStandardDeviation(reactionTimes))
+          : 0;
 
       setState((prev) => ({
         ...prev,
         phase: "gameover",
         levelComplete: true,
-        finalStats: { accuracy, avgReaction, avgSwitch },
+        finalStats: { accuracy, avgReaction, avgSwitch, avgConsistencyMs },
       }));
     } else {
       levelResultsRef.current = [
@@ -562,10 +646,7 @@ export function useGame(
             ];
 
       const processedLevelResults = rawLevelResults.map((level) => {
-        const levelHits = level.shots.filter((s: any) => s.hit);
-        const levelReactionTimes = levelHits.map(
-          (s: any) => s.reactionTime ?? 0,
-        );
+        const levelReactionTimes = getReactionTimesForStats(level.shots || []);
         const levelSD = Math.round(getStandardDeviation(levelReactionTimes));
 
         return {
@@ -574,7 +655,7 @@ export function useGame(
           missCount: level.missCount,
           consistencyMs: levelSD,
           stabilityStatus: levelSD > 200 ? "Unstable" : "Stable",
-          shots: level.shots.map((s: any) => ({
+          shots: (level.shots || []).map((s: any) => ({
             x: s.x,
             y: s.y,
             hit: s.hit,
@@ -584,12 +665,18 @@ export function useGame(
         };
       });
 
-      const allShots = rawLevelResults.flatMap((r) => r.shots);
+      const allShots = rawLevelResults.flatMap((r) => r.shots || []);
       const hits = allShots.filter((s) => s.hit);
-      const reactionTimes = hits.map((s) => s.reactionTime ?? 0);
-      const switchTimes = hits
-        .map((s) => s.switchTime)
-        .filter((t): t is number => typeof t === "number");
+      const reactionTimes = rawLevelResults.flatMap((level) =>
+        getReactionTimesForStats(level.shots || []),
+      );
+      const switchTimes = rawLevelResults.flatMap((level) =>
+        getSwitchTimesForStats(level.shots || []),
+      );
+      const avgConsistencyMs =
+        reactionTimes.length > 0
+          ? Math.round(getStandardDeviation(reactionTimes))
+          : 0;
 
       return {
         gameId: "target-ghost",
@@ -598,24 +685,27 @@ export function useGame(
         sessionId,
         accuracy:
           allShots.length > 0 ? (hits.length / allShots.length) * 100 : 0,
-        averagereactionTimeMs:
+        reactionTimeMs:
           reactionTimes.length > 0 ? Math.round(getAverage(reactionTimes)) : 0,
         averageSwitchTimeMs:
           switchTimes.length > 0 ? Math.round(getAverage(switchTimes)) : 0,
+        avgConsistencyMs,
         responseTimesMs: reactionTimes,
         startedAt: initialStartTimeRef.current,
         endedAt,
         rawData: {
           finalLevel: finalState.currentLevel,
           levelComplete: finalState.levelComplete,
+          targetDistancePercent: clampTargetDistance(targetDistancePercent),
           hitCount: hits.length,
           missCount: allShots.length - hits.length,
-          globalConsistencyMs: Math.round(getStandardDeviation(reactionTimes)),
+          avgConsistencyMs,
+          globalConsistencyMs: avgConsistencyMs,
           levelResults: processedLevelResults, // ข้อมูลที่ Clean แล้วจะอยู่ในนี้ครับ
         },
-      } as any;
+      };
     },
-    [playerId, sessionId],
+    [playerId, sessionId, targetDistancePercent],
   );
 
   /**

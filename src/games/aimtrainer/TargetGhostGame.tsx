@@ -8,23 +8,21 @@ import {
 import { useGame } from "./logic";
 import { LEVELS } from "./types";
 import type { GameResult, GamePhase, LevelConfig, Shot } from "./types";
+import { TargetConnectorOverlay } from "./TargetConnectorOverlay";
 
 // ==================== Types & Interfaces ====================
 
-/** Visual effect shown when player clicks (hit or miss) */
 interface ShotEffect {
   id: number;
-  x: number; // Position X (0-100 percentage)
-  y: number; // Position Y (0-100 percentage)
-  hit: boolean; // true = hit (green), false = miss (red)
+  x: number;
+  y: number;
+  hit: boolean;
 }
 
-/** Props for MenuScreen component */
 interface MenuScreenProps {
   onStart: (level: number) => void;
 }
 
-/** Props for HUD (heads-up display) component */
 interface HUDProps {
   phase: GamePhase;
   level: number;
@@ -33,17 +31,16 @@ interface HUDProps {
   totalTime: number;
 }
 
-/** Props for game over screen component */
 interface GameOverScreenProps {
   accuracy: number;
   avgReaction: number;
   avgSwitch: number;
+  stabilityStatus: string;
   currentLevel: number;
   onMenu: () => void;
   cleared: boolean;
 }
 
-/** Props for level result screen component */
 interface ResultScreenProps {
   level: number;
   config: LevelConfig;
@@ -56,7 +53,6 @@ interface ResultScreenProps {
   onMenu: () => void;
 }
 
-/** Props for game canvas (main game area) component */
 interface GameCanvasProps {
   playerId: string;
   sessionId: string;
@@ -65,15 +61,7 @@ interface GameCanvasProps {
 
 // ==================== Audio Effect Function ====================
 let sharedAudioCtx: AudioContext | null = null;
-/**
- * Plays a beep sound to provide audio feedback for hits and misses
- * - Hit: High pitch (880Hz) sine wave - 100ms
- * - Miss: Low pitch (150Hz) sawtooth wave - 200ms
- *
- * @param isHit - true for hit sound, false for miss sound
- */
 const playBeep = (isHit: boolean) => {
-  // 2. ตรวจสอบและสร้าง Context แค่ครั้งเดียว
   if (!sharedAudioCtx) {
     const AudioContextClass =
       window.AudioContext || (window as any).webkitAudioContext;
@@ -81,12 +69,10 @@ const playBeep = (isHit: boolean) => {
     sharedAudioCtx = new AudioContextClass();
   }
 
-  // 3. ปลุก Context ให้ตื่น (บางเบราว์เซอร์จะสั่งพักไว้ถ้าไม่มีการใช้งาน)
   if (sharedAudioCtx.state === "suspended") {
     sharedAudioCtx.resume();
   }
 
-  // 4. ส่วนการสร้างเสียง (Oscillator) ใช้ sharedAudioCtx แทน
   const oscillator = sharedAudioCtx.createOscillator();
   const gainNode = sharedAudioCtx.createGain();
 
@@ -118,12 +104,7 @@ const playBeep = (isHit: boolean) => {
 
 // ==================== MenuScreen Component ====================
 
-/**
- * Main menu screen displayed at game start
- * Shows game title and instructions, with click to start functionality
- */
 function MenuScreen({ onStart }: MenuScreenProps) {
-  // Define all inline styles for the menu
   const styles: Record<string, CSSProperties> = {
     menu: {
       width: "100vw",
@@ -182,35 +163,6 @@ function MenuScreen({ onStart }: MenuScreenProps) {
       textTransform: "uppercase",
       whiteSpace: "nowrap",
     },
-    titleAccent: { color: "#ff4444" },
-    startBtn: {
-      position: "relative",
-      background: "rgba(255,68,68,0.08)",
-      border: "2px solid rgba(255,68,68,0.4)",
-      borderRadius: 4,
-      padding: "32px 60px",
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "center",
-      gap: 12,
-      cursor: "pointer",
-      transition: "all 0.3s",
-      overflow: "hidden",
-      minWidth: 200,
-    },
-    startText: {
-      fontSize: 32,
-      fontWeight: 900,
-      color: "#ff4444",
-      letterSpacing: 3,
-      fontFamily: '"Rajdhani", monospace',
-      textTransform: "uppercase",
-    },
-    startSubtext: {
-      fontSize: 14,
-      color: "rgba(255,255,255,0.5)",
-      letterSpacing: 3,
-    },
   };
 
   return (
@@ -240,9 +192,9 @@ function MenuScreen({ onStart }: MenuScreenProps) {
               lineHeight: 1.6,
             }}
           >
-            When the target shows a red light, click it as quickly as possible.
+            Shoot targets as quickly as possible.
             <br />
-            Press any button to test.
+            Press anywhere to start.
           </p>
         </div>
       </div>
@@ -252,12 +204,6 @@ function MenuScreen({ onStart }: MenuScreenProps) {
 
 // ==================== HUD Component ====================
 
-/**
- * Heads-up display showing current level and remaining time during gameplay
- * - Level indicator on the left
- * - Countdown timer with visual bar on the right
- * - Timer color changes based on urgency (green > yellow > red)
- */
 function HUD({ phase, level, timeLeft, totalTime }: HUDProps) {
   const pct = totalTime > 0 ? (timeLeft / totalTime) * 100 : 100;
   const timeColor = pct > 50 ? "#00ffaa" : pct > 25 ? "#ffaa00" : "#ff4444";
@@ -291,11 +237,6 @@ function HUD({ phase, level, timeLeft, totalTime }: HUDProps) {
       textTransform: "uppercase",
       color: "rgba(255,255,255,0.35)",
       fontWeight: 600,
-    },
-    hudSublabel: {
-      fontSize: 10,
-      color: "rgba(255,255,255,0.25)",
-      marginTop: 1,
     },
     hudValue: {
       fontSize: 24,
@@ -333,29 +274,10 @@ function HUD({ phase, level, timeLeft, totalTime }: HUDProps) {
       letterSpacing: 1,
       color: timeColor,
     },
-    phaseStatus: {
-      display: "flex",
-      alignItems: "center",
-      gap: 8,
-      fontSize: 14,
-      fontWeight: 700,
-      letterSpacing: 3,
-      textTransform: "uppercase",
-    },
-    statusDot: {
-      width: 8,
-      height: 8,
-      borderRadius: "50%",
-      animation: "blink 0.8s ease infinite",
-    },
   };
 
   return (
     <div style={s.hud}>
-      <style>{`
-        @keyframes blink { 0%,100% { opacity:1; } 50% { opacity:0.2; } }
-      `}</style>
-
       <div style={s.hudCenter}>
         <div
           style={{
@@ -370,7 +292,6 @@ function HUD({ phase, level, timeLeft, totalTime }: HUDProps) {
             <div style={{ ...s.hudValue, color: "#00ccff" }}>{level}</div>
           </div>
         </div>
-        {/* Show timer during shooting phase */}
         {phase === "shooting" && (
           <div style={s.timerWrap}>
             <div style={s.timerBarBg}>
@@ -386,18 +307,13 @@ function HUD({ phase, level, timeLeft, totalTime }: HUDProps) {
 
 // ==================== GameOverScreen Component ====================
 
-/**
- * Displays game end screen with final statistics
- * Shows summary of performance including score, hits, misses, center hits, and early clicks
- * Different message and icon if all levels cleared vs game ended early
- */
 function GameOverScreen({
   accuracy,
   avgReaction,
   avgSwitch,
+  stabilityStatus,
   onMenu,
 }: GameOverScreenProps) {
-  // Define styles for game over screen
   const s: Record<string, CSSProperties> = {
     wrap: {
       width: "100vw",
@@ -435,12 +351,6 @@ function GameOverScreen({
       margin: 0,
       textTransform: "uppercase",
     },
-    clearedSub: {
-      color: "#ffcc00",
-      fontSize: 18,
-      letterSpacing: 3,
-      textTransform: "uppercase",
-    },
     stats: {
       display: "flex",
       gap: 32,
@@ -469,7 +379,6 @@ function GameOverScreen({
       color: "#fff",
       fontFamily: '"Rajdhani", monospace',
     },
-    btns: { display: "flex", gap: 12 },
     btnBase: {
       padding: "13px 32px",
       fontFamily: '"Rajdhani", "Sarabun", sans-serif',
@@ -481,27 +390,26 @@ function GameOverScreen({
       cursor: "pointer",
       transition: "all 0.2s",
       border: "1px solid",
+      background: "transparent",
+      borderColor: "rgba(255,255,255,0.12)",
+      color: "rgba(255,255,255,0.45)",
     },
   };
 
   return (
     <div style={s.wrap}>
-      <style>{`
-    @keyframes bounce { to { transform: translateY(-8px); } }
-  `}</style>
+      <style>{`@keyframes bounce { to { transform: translateY(-8px); } }`}</style>
       <div style={s.bgGrid} />
       <div style={s.content}>
         <div style={s.bigIcon}>🏆</div>
         <h1 style={s.title}>All Stages Cleared!</h1>
-
-        {/* กล่องสถิติใหม่ 3 ค่า */}
         <div style={s.stats}>
           <div style={s.stat}>
             <span style={s.slabel}>OVERALL ACCURACY</span>
             <span style={{ ...s.sval, color: "#eeecec" }}>{accuracy}%</span>
           </div>
           <div style={s.stat}>
-            <span style={s.slabel}>AVG SWITCH (FLICK)</span>
+            <span style={s.slabel}>AVG SWITCH</span>
             <span style={{ ...s.sval, color: "#00ccff" }}>
               {avgSwitch > 0 ? `${avgSwitch}ms` : "0 ms"}
             </span>
@@ -512,21 +420,21 @@ function GameOverScreen({
               {avgReaction > 0 ? `${avgReaction}ms` : "0 ms"}
             </span>
           </div>
+          <div style={s.stat}>
+            <span style={s.slabel}>STABILITY</span>
+            <span
+              style={{
+                ...s.sval,
+                color: stabilityStatus === "Stable" ? "#00ffaa" : "#ff3d6b",
+              }}
+            >
+              {stabilityStatus === "Stable" ? "STABLE" : "UNSTABLE"}
+            </span>
+          </div>
         </div>
-
-        <div style={s.btns}>
-          <button
-            style={{
-              ...s.btnBase,
-              background: "transparent",
-              borderColor: "rgba(255,255,255,0.12)",
-              color: "rgba(255,255,255,0.45)",
-            }}
-            onClick={onMenu}
-          >
-            Main Menu
-          </button>
-        </div>
+        <button style={s.btnBase} onClick={onMenu}>
+          Main Menu
+        </button>
       </div>
     </div>
   );
@@ -534,13 +442,8 @@ function GameOverScreen({
 
 // ==================== ResultScreen Component ====================
 
-/**
- * Displays detailed performance metrics for the completed level
- * Shows accuracy, average reaction time, switch time, and fastest reaction
- * Provides option to proceed to next level or return to menu
- */
 function ResultScreen({
-  level,
+  config,
   shots,
   hitCount,
   avgReaction,
@@ -549,18 +452,17 @@ function ResultScreen({
   onNext,
   onMenu,
 }: ResultScreenProps) {
-  // Calculate accuracy percentage
+  // Accuracy ยังคงคำนวณจากทุกนัด
   const accuracy =
     shots.length > 0 ? Math.round((hitCount / shots.length) * 100) : 0;
-  // Find best (fastest) reaction time among successful hits
-  const hitShots = shots.filter((s) => s.hit);
-  const bestTime =
-    hitShots.length > 0
-      ? Math.min(...hitShots.map((s) => s.reactionTime || 9999))
-      : 0;
 
-  // Calculate SD
-  const reactionTimes = hitShots
+  // กรองเป้าที่ 0 และ เป้าสุดท้ายออก สำหรับคิดค่าความเสถียร SD
+  const lastId = config.targetCount - 1;
+  const validTimingShots = shots.filter(
+    (s) => s.hit && s.targetId !== 0 && s.targetId !== lastId,
+  );
+
+  const reactionTimes = validTimingShots
     .map((s) => s.reactionTime || 0)
     .filter((t) => t > 0);
   const avg =
@@ -603,15 +505,6 @@ function ResultScreen({
       padding: "40px 20px",
       maxWidth: 700,
       width: "100%",
-    },
-    badge: {
-      color: "rgba(255,255,255,0.4)",
-      fontSize: 14,
-      letterSpacing: 4,
-      textTransform: "uppercase",
-      border: "1px solid rgba(255,255,255,0.1)",
-      padding: "8px 20px",
-      borderRadius: 2,
     },
     title: {
       fontSize: 32,
@@ -675,7 +568,6 @@ function ResultScreen({
       <div style={s.bgGrid} />
       <div style={s.inner}>
         <h2 style={s.title}>PERFORMANCE METRICS</h2>
-
         <div style={s.statsGrid}>
           {[
             {
@@ -693,7 +585,7 @@ function ResultScreen({
             {
               icon: sd > 150 ? "⚠️" : "🎯",
               val: sd > 150 ? "UNSTABLE" : "STABLE",
-              label: `STABILITY `,
+              label: `STABILITY`,
               color: sd > 150 ? "#ff3d6b" : "#00ffaa",
             },
             {
@@ -757,13 +649,7 @@ function ResultScreen({
 
 // ==================== GameCanvas Component ====================
 
-/**
- * Main game component that renders the game arena and handles gameplay
- * Manages shot effects, target rendering, and game state transitions
- * Routes between menu, shooting, result, and gameover screens
- */
 function GameCanvas(props: GameCanvasProps) {
-  // Get all game functions and state from the useGame hook
   const {
     state,
     getLevelConfig,
@@ -773,70 +659,70 @@ function GameCanvas(props: GameCanvasProps) {
     submitAndExit,
   } = useGame(props.playerId, props.sessionId, props.onGameComplete);
   const arenaRef = useRef<HTMLDivElement>(null);
-
-  // Track temporary shot effects (hit/miss animations)
   const [shotEffects, setShotEffects] = useState<ShotEffect[]>([]);
   const effectIdRef = useRef(0);
+  const [showPath, setShowPath] = useState(true);
+  const [arenaSize, setArenaSize] = useState({ width: 0, height: 0 });
 
-  /**
-   * Handles click events on the game arena
-   * Calculates click coordinates, creates visual effect, plays sound, and processes shot
-   */
+  useEffect(() => {
+    const updateSize = () => {
+      if (arenaRef.current) {
+        setArenaSize({
+          width: arenaRef.current.clientWidth,
+          height: arenaRef.current.clientHeight,
+        });
+      }
+    };
+    updateSize();
+    window.addEventListener("resize", updateSize);
+    return () => window.removeEventListener("resize", updateSize);
+  }, []);
+
   const onArenaClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       if (state.phase !== "shooting") return;
       const rect = arenaRef.current?.getBoundingClientRect();
       if (!rect) return;
 
-      // Convert click position to percentage-based coordinates (0-100)
       const x = ((e.clientX - rect.left) / rect.width) * 100;
       const y = ((e.clientY - rect.top) / rect.height) * 100;
       const clickPxX = e.clientX - rect.left;
       const clickPxY = e.clientY - rect.top;
       const id = ++effectIdRef.current;
 
-      // Check if click hit any target
       const clickedTarget = state.targets.find((t) => {
         const targetPxX = (t.x / 100) * rect.width;
         const targetPxY = (t.y / 100) * rect.height;
-
         const dx = targetPxX - clickPxX;
         const dy = targetPxY - clickPxY;
         return Math.sqrt(dx * dx + dy * dy) <= 32;
       });
 
-      // Determine if shot was a hit
       let hit = false;
       if (clickedTarget && clickedTarget.id === state.activeTargetId) {
         hit = true;
       }
       playBeep(hit);
 
-      // Add shot effect animation (will auto-remove after 600ms)
       setShotEffects((prev) => [...prev, { id, x, y, hit }]);
       setTimeout(
         () => setShotEffects((prev) => prev.filter((e) => e.id !== id)),
         400,
       );
 
-      const arenaSize = {
-        width: rect.width,
-        height: rect.height,
-      };
-      handleShoot(x, y, arenaSize);
+      const aSize = { width: rect.width, height: rect.height };
+      handleShoot(x, y, aSize);
     },
     [state.phase, state.targets, state.activeTargetId, handleShoot],
   );
 
   const config = getLevelConfig(state.currentLevel);
   const isShooting = state.phase === "shooting";
+
+  // แสดงเป้าเมื่อยิงเป้าแรกไปแล้ว (hasStartedShooting) หรือ เป็นเป้าที่กำลังรอให้กดยิง
   const showTargets =
     isShooting && state.targets.some((t) => t.isActive || t.isHit);
 
-  /**
-   * Update cursor style based on game phase
-   * Show crosshair during shooting, normal cursor otherwise
-   */
   useEffect(() => {
     document.body.style.cursor = isShooting ? "crosshair" : "default";
     return () => {
@@ -844,18 +730,20 @@ function GameCanvas(props: GameCanvasProps) {
     };
   }, [isShooting]);
 
-  // Route to different screen based on game phase
   if (state.phase === "menu") return <MenuScreen onStart={startLevel} />;
 
   if (state.phase === "gameover") {
     const finalAccuracy = state.finalStats?.accuracy || 0;
     const finalReaction = state.finalStats?.avgReaction || 0;
     const finalSwitch = state.finalStats?.avgSwitch || 0;
+    const finalStability = state.finalStats?.stabilityStatus || "Unstable";
+
     return (
       <GameOverScreen
         accuracy={finalAccuracy}
         avgReaction={finalReaction}
         avgSwitch={finalSwitch}
+        stabilityStatus={finalStability}
         currentLevel={state.currentLevel}
         onMenu={submitAndExit}
         cleared={state.levelComplete}
@@ -863,16 +751,23 @@ function GameCanvas(props: GameCanvasProps) {
     );
   }
 
-  // Calculate statistics for result screen
   if (state.phase === "result") {
     const hits = state.shots.filter((s) => s.hit);
-    const switchTimes = hits
+
+    // ส่งข้อมูลแบบกรองตัวหัวและท้ายแล้วเพื่อไปแสดงผล
+    const lastId = config.targetCount - 1;
+    const validTimingHits = hits.filter(
+      (s) => s.targetId !== 0 && s.targetId !== lastId,
+    );
+
+    const switchTimes = validTimingHits
       .map((s) => s.switchTime)
       .filter((time): time is number => typeof time === "number");
     const avgReaction =
-      hits.length > 0
+      validTimingHits.length > 0
         ? Math.round(
-            hits.reduce((a, s) => a + (s.reactionTime || 0), 0) / hits.length,
+            validTimingHits.reduce((a, s) => a + (s.reactionTime || 0), 0) /
+              validTimingHits.length,
           )
         : 0;
     const avgSwitch =
@@ -882,6 +777,7 @@ function GameCanvas(props: GameCanvasProps) {
           )
         : 0;
     const isLastLevel = state.currentLevel >= LEVELS.length;
+
     return (
       <ResultScreen
         level={state.currentLevel}
@@ -897,7 +793,6 @@ function GameCanvas(props: GameCanvasProps) {
     );
   }
 
-  // Main game arena during shooting phase
   const containerStyle: CSSProperties = {
     width: "100vw",
     height: "100vh",
@@ -927,11 +822,7 @@ function GameCanvas(props: GameCanvasProps) {
       <style>{`
         @keyframes pulseRing { 0% { transform: scale(1); opacity:0.8; } 100% { transform: scale(1.7); opacity:0; } }
         @keyframes shotAnim { 0% { transform: translate(-50%,-50%) scale(0.5); opacity:1; } 100% { transform: translate(-50%,-50%) scale(2.5); opacity:0; } }
-        @keyframes blink { 0%,100% { opacity:1; } 50% { opacity:0.2; } }
-        @keyframes fadeInOut { from { opacity:0; transform: translate(-50%,-60%); } to { opacity:1; transform: translate(-50%,-50%); } }
       `}</style>
-
-      {/* BG grid */}
       <div
         style={{
           position: "absolute",
@@ -942,8 +833,6 @@ function GameCanvas(props: GameCanvasProps) {
           backgroundSize: "40px 40px",
         }}
       />
-
-      {/* HUD */}
       {isShooting && (
         <HUD
           phase={state.phase}
@@ -953,48 +842,13 @@ function GameCanvas(props: GameCanvasProps) {
           totalTime={config.shootingTime}
         />
       )}
-
-      {/* Arena */}
       <div ref={arenaRef} onClick={onArenaClick} style={arenaStyle}>
-        {/* Waiting signal */}
-        {isShooting && state.activeTargetId === null && !showTargets && (
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              pointerEvents: "none",
-              zIndex: 5,
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                color: "rgba(255,255,255,0.55)",
-                fontSize: 16,
-                fontWeight: 700,
-                letterSpacing: 3,
-                textTransform: "uppercase",
-              }}
-            >
-              <div
-                style={{
-                  width: 8,
-                  height: 8,
-                  background: "rgba(0,255,170,0.7)",
-                  borderRadius: "50%",
-                  animation: "blink 1s ease infinite",
-                }}
-              />
-              <span>Waiting for signal...</span>
-            </div>
-          </div>
-        )}
-        {/* Targets */}
+        <TargetConnectorOverlay
+          targets={state.targets}
+          arenaWidth={arenaSize.width}
+          arenaHeight={arenaSize.height}
+          visible={showPath}
+        />
         {showTargets &&
           state.targets.map((target) => {
             const isActive = target.isActive;
@@ -1044,7 +898,6 @@ function GameCanvas(props: GameCanvasProps) {
                     justifyContent: "center",
                   }}
                 >
-                  {/* Rings */}
                   {[
                     { size: 60, color: ringOuterColor },
                     { size: 40, color: ringMidColor },
@@ -1101,7 +954,6 @@ function GameCanvas(props: GameCanvasProps) {
             );
           })}
 
-        {/* Shot effects */}
         {shotEffects.map((effect) => (
           <div
             key={effect.id}
@@ -1125,17 +977,69 @@ function GameCanvas(props: GameCanvasProps) {
             }}
           />
         ))}
+
+        {state.phase === "shooting" && (
+          <div
+            style={{
+              position: "absolute",
+              top: 12,
+              right: 12,
+              zIndex: 100,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              background: "rgba(0,0,0,0.5)",
+              padding: "6px 12px",
+              borderRadius: 20,
+              border: "1px solid rgba(0,255,170,0.2)",
+              cursor: "pointer",
+              userSelect: "none",
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowPath(!showPath);
+            }}
+          >
+            <span
+              style={{
+                fontSize: 10,
+                color: showPath ? "#00ffaa" : "#666",
+                fontWeight: 700,
+                letterSpacing: 1,
+              }}
+            >
+              SHOW PATH
+            </span>
+            <div
+              style={{
+                width: 24,
+                height: 12,
+                background: showPath ? "#00ffaa" : "#333",
+                borderRadius: 6,
+                position: "relative",
+                transition: "0.3s",
+              }}
+            >
+              <div
+                style={{
+                  width: 8,
+                  height: 8,
+                  background: "#fff",
+                  borderRadius: "50%",
+                  position: "absolute",
+                  top: 2,
+                  left: showPath ? 14 : 2,
+                  transition: "0.2s",
+                }}
+              />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-// ==================== Main Component ====================
-
-/**
- * Main export component for the Target Ghost Game
- * Wrapper that passes props to GameCanvas
- */
 export default function TargetGhostGame(props: GameCanvasProps) {
   return <GameCanvas {...props} />;
 }

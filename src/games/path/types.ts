@@ -3,6 +3,7 @@ export type GamePhase =
   | "memorize"
   | "countdown"
   | "navigate"
+  | "view_path"
   | "result";
 
 export interface Point {

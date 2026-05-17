@@ -48,6 +48,7 @@ type Action =
   | { type: "MOUSE_MOVE"; payload: Point }
   | { type: "MOUSE_UP" }
   | { type: "END_NAVIGATE"; payload: AttemptResult }
+  | { type: "VIEW_STATS" }
   | { type: "NEXT_ROUND" }
   | { type: "RESET" }
   | { type: "SHOW_SUMMARY" };
@@ -101,11 +102,13 @@ function reducer(state: GameState, action: Action): GameState {
     case "END_NAVIGATE": {
       return {
         ...state,
-        phase: "result",
+        phase: "view_path",
         result: action.payload,
         roundResults: [...state.roundResults, action.payload],
       };
     }
+    case "VIEW_STATS":
+      return { ...state, phase: "result" };
     case "NEXT_ROUND":
       return { ...state, phase: "idle" };
     case "RESET":
@@ -254,11 +257,11 @@ function drawGame(
     COLORS.target,
     COLORS.targetGlow,
   );
-  ctx.fillStyle = "#fff";
-  ctx.font = "bold 11px monospace";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText("END", state.target.x, state.target.y);
+  // Target center dot
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath();
+  ctx.arc(state.target.x, state.target.y, 3, 0, Math.PI * 2);
+  ctx.fill();
 
   // Start
   drawCircleWithGlow(
@@ -269,11 +272,11 @@ function drawGame(
     COLORS.start,
     COLORS.startGlow,
   );
-  ctx.fillStyle = "#fff";
-  ctx.font = "bold 11px monospace";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText("START", state.start.x, state.start.y);
+  // Start center dot
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath();
+  ctx.arc(state.start.x, state.start.y, 3, 0, Math.PI * 2);
+  ctx.fill();
 }
 
 function drawCircleWithGlow(
@@ -394,7 +397,11 @@ export default function SpatialMemoryGame({
 
       // หาเวลาเพื่อใช้อัปเดตตำแหน่งสิ่งกีดขวางแบบไหลลื่น
       let timeForObstacles = Date.now();
-      if (s.phase === "result" && s.result && s.startTime) {
+      if (
+        (s.phase === "result" || s.phase === "view_path") &&
+        s.result &&
+        s.startTime
+      ) {
         timeForObstacles = s.startTime + s.result.timeTaken;
       }
 
@@ -631,6 +638,32 @@ export default function SpatialMemoryGame({
             )}
           </>
         )}
+        {/* หน้า View Path แต่ละด่าน (แสดงเส้นที่ลาก) */}
+        {state.phase === "view_path" && state.result && (
+          <div
+            style={{
+              position: "absolute",
+              bottom: 24,
+              left: 0,
+              right: 0,
+              display: "flex",
+              justifyContent: "center",
+              zIndex: 100,
+            }}
+          >
+            <button
+              style={{
+                ...styles.btnPrimary,
+                background: "rgba(3,5,8,0.85)",
+                boxShadow: "0 0 20px rgba(0,255,170,0.2)",
+              }}
+              onClick={() => dispatch({ type: "VIEW_STATS" })}
+            >
+              VIEW RESULTS →
+            </button>
+          </div>
+        )}
+
         {/* 1. หน้า Result แต่ละด่าน (แสดงแค่ Accuracy กับ Time) */}
         {state.phase === "result" && state.result && (
           <div
@@ -870,7 +903,7 @@ export default function SpatialMemoryGame({
                     if (onComplete) onComplete(allResults);
                   }}
                 >
-                  SUBMIT & EXIT
+                  Main Menu
                 </button>
               </div>
             </div>

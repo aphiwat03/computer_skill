@@ -9,8 +9,8 @@ import type {
 
 export const DIFFICULTY_CONFIGS: Record<string, Partial<GameConfig>> = {
   easy: { obstacleCount: 2, memorizeTime: 5000 },
-  medium: { obstacleCount: 4, memorizeTime: 3500 },
-  hard: { obstacleCount: 6, memorizeTime: 2500 },
+  medium: { obstacleCount: 3, memorizeTime: 3500 },
+  hard: { obstacleCount: 4, memorizeTime: 2500 },
 };
 
 export function createDefaultConfig(
@@ -60,19 +60,60 @@ export function generateLevel(
   const { canvasWidth: W, canvasHeight: H } = config;
   const margin = 60;
 
-  const start: Point = {
-    x: margin + Math.random() * (W * 0.3),
-    y: margin + Math.random() * (H - margin * 2),
-  };
+  for (let attempt = 0; attempt < 100; attempt++) {
+    const start: Point = {
+      x: margin + Math.random() * (W * 0.3),
+      y: margin + Math.random() * (H - margin * 2),
+    };
 
-  // Target on opposite side
-  const target: Point = {
-    x: W - margin - Math.random() * (W * 0.3),
-    y: margin + Math.random() * (H - margin * 2),
-  };
+    // Target on opposite side
+    const target: Point = {
+      x: W - margin - Math.random() * (W * 0.3),
+      y: margin + Math.random() * (H - margin * 2),
+    };
 
+    if (distance(start, target) < W * 0.5) {
+      continue;
+    }
+
+    const obstacles = generateObstacles(config, start, target, round);
+
+    let isBlocked = false;
+    for (let i = 0; i <= 100; i++) {
+      const t = i / 100;
+      const pt: Point = {
+        x: start.x + (target.x - start.x) * t,
+        y: start.y + (target.y - start.y) * t,
+      };
+
+      if (checkCollision(pt, obstacles, config) === "obstacle") {
+        isBlocked = true;
+        break;
+      }
+    }
+
+    if (isBlocked) {
+      return { start, target, obstacles };
+    }
+  }
+
+  // Fallback
+  const start: Point = { x: margin, y: H / 2 };
+  const target: Point = { x: W - margin, y: H / 2 };
   const obstacles = generateObstacles(config, start, target, round);
-
+  obstacles.push({
+    id: `obs-forced`,
+    x: W / 2 - 25,
+    y: H / 2 - 25,
+    width: 50,
+    height: 50,
+    baseX: W / 2 - 25,
+    baseY: H / 2 - 25,
+    moveType: "static",
+    moveRange: 0,
+    moveSpeed: 0,
+    moveOffset: 0,
+  });
   return { start, target, obstacles };
 }
 
@@ -89,9 +130,9 @@ function generateObstacles(
   if (round === 3) {
     currentObstacleCount += 2;
   } else if (round === 4) {
-    currentObstacleCount += 4;
+    currentObstacleCount += 3;
   } else if (round >= 5) {
-    currentObstacleCount += 6;
+    currentObstacleCount += 4;
   }
   const OBS_SIZE = 50;
   const safeRadius = 110;
@@ -113,7 +154,7 @@ function generateObstacles(
       if (distStart < safeRadius || distTarget < safeRadius) continue;
       if (
         obstacles.some((o) =>
-          rectsOverlap({ x, y, width: w, height: h }, o, 15),
+          rectsOverlap({ x, y, width: w, height: h }, o, 40),
         )
       )
         continue;

@@ -716,6 +716,12 @@ export default function SpatialMemoryGame({
                     color: state.result.success ? "#00ff9d" : "#ff3d6b",
                   },
                   {
+                    icon: "🛣️",
+                    val: `${calculateBreakdown(state.result, config).pathEfficiency}%`, // ดึงค่า Path Efficiency มาแสดง
+                    label: "PATH EFFICIENCY",
+                    color: "#a8e6cf",
+                  },
+                  {
                     icon: "⏱️",
                     val: `${(state.result.timeTaken / 1000).toFixed(2)}s`,
                     label: "TIME TAKEN",
@@ -813,14 +819,18 @@ export default function SpatialMemoryGame({
                 {[
                   {
                     icon: "📊",
-                    // คำนวณค่าเฉลี่ยความแม่นยำ
                     val: `${Math.round(state.roundResults.reduce((sum, r) => sum + calculateBreakdown(r, config).accuracy, 0) / state.totalRounds)}%`,
                     label: "AVG ACCURACY",
                     color: "#00ff9d",
                   },
                   {
+                    icon: "🛣️",
+                    val: `${Math.round(state.roundResults.reduce((sum, r) => sum + calculateBreakdown(r, config).pathEfficiency, 0) / state.totalRounds)}%`,
+                    label: "AVG PATH EFF",
+                    color: "#a8e6cf",
+                  },
+                  {
                     icon: "⏱️",
-                    // คำนวณค่าเฉลี่ยเวลา
                     val: `${(state.roundResults.reduce((sum, r) => sum + r.timeTaken, 0) / state.totalRounds / 1000).toFixed(2)}s`,
                     label: "AVG TIME TAKEN",
                     color: "#00ccff",

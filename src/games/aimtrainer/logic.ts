@@ -40,10 +40,16 @@ function getStandardDeviation(values: number[]) {
 
 // ==================== Target Management Functions ====================
 
-function generateTargets(count: number): Target[] {
+function generateTargets(
+  count: number,
+  distancePx: number,
+  arenaSize: ArenaSize,
+): Target[] {
   const targets: Target[] = [];
   const margin = 12;
-  const FIXED_DISTANCE = 25;
+
+  const w = arenaSize.width > 0 ? arenaSize.width : 800;
+  const h = arenaSize.height > 0 ? arenaSize.height : 600;
 
   for (let i = 0; i < count; i++) {
     if (i === 0) {
@@ -57,24 +63,28 @@ function generateTargets(count: number): Target[] {
     } else {
       let placed = false;
       let attempts = 0;
-      const maxAttempts = 200;
+      const maxAttempts = 100;
       const prevTarget = targets[i - 1];
 
       while (!placed && attempts < maxAttempts) {
         const angleRad = Math.random() * Math.PI * 2;
-        const newX = prevTarget.x + FIXED_DISTANCE * Math.cos(angleRad);
-        const newY = prevTarget.y + FIXED_DISTANCE * Math.sin(angleRad);
+
+        const deltaXPx = distancePx * Math.cos(angleRad);
+        const deltaYPx = distancePx * Math.sin(angleRad);
+
+        const newX = prevTarget.x + (deltaXPx / w) * 100;
+        const newY = prevTarget.y + (deltaYPx / h) * 100;
 
         const inBounds =
           newX >= margin &&
           newX <= 100 - margin &&
           newY >= margin &&
           newY <= 100 - margin;
-
+        const minSpacing = Math.min(distancePx * 0.8, 80);
         const tooClose = targets.some((t) => {
-          const dx = t.x - newX;
-          const dy = t.y - newY;
-          return Math.sqrt(dx * dx + dy * dy) < 18;
+          const dxPx = ((t.x - newX) / 100) * w;
+          const dyPx = ((t.y - newY) / 100) * h;
+          return Math.sqrt(dxPx * dxPx + dyPx * dyPx) < minSpacing;
         });
 
         if (inBounds && !tooClose) {
@@ -112,7 +122,6 @@ const initialState: GameState = {
   targets: [],
   shots: [],
   activeTargetId: null,
-  score: 0,
   lives: 3,
   missCount: 0,
   hitCount: 0,
@@ -125,6 +134,7 @@ const initialState: GameState = {
   totalTime: 0,
   shootingTimeLeft: 0,
   hasStartedShooting: false,
+  isTimerPaused: false,
   finalStats: {
     accuracy: 0,
     avgReaction: 0,
@@ -140,22 +150,27 @@ export function useGame(
   playerId: string,
   sessionId: string,
   onGameComplete: (result: GameResult) => void,
+  levelDistances: Record<number, number>,
+  arenaSize: { width: number; height: number },
 ) {
   const [state, setState] = useState<GameState>(initialState);
   const levelResultsRef = useRef<any[]>([]);
   const initialStartTimeRef = useRef<string>(new Date().toISOString());
   const signalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const shootingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const stateRef = useRef(state);
   stateRef.current = state;
 
+  // Tracking refs
+  const isCurrentlyWaitingRef = useRef<boolean>(false);
+  const trueReactionTimeRef = useRef<number | null>(null);
+  const mouseStartPosRef = useRef<{ x: number; y: number } | null>(null);
+  const waitTargetPxPosRef = useRef<{ x: number; y: number } | null>(null);
+
   const clearAllTimers = useCallback(() => {
     if (signalTimerRef.current) clearTimeout(signalTimerRef.current);
-    if (shootingTimerRef.current) clearTimeout(shootingTimerRef.current);
     if (countdownRef.current) clearInterval(countdownRef.current);
     signalTimerRef.current = null;
-    shootingTimerRef.current = null;
     countdownRef.current = null;
   }, []);
 
@@ -163,48 +178,55 @@ export function useGame(
     return LEVELS[Math.min(level - 1, LEVELS.length - 1)];
   }, []);
 
-  // Effect สำหรับจับเวลา จะทำงานเมื่อ hasStartedShooting = true เท่านั้น
   useEffect(() => {
     if (
       state.phase === "shooting" &&
       state.hasStartedShooting &&
-      !countdownRef.current
+      !state.isTimerPaused
     ) {
-      const config = getLevelConfig(state.currentLevel);
-
-      countdownRef.current = setInterval(() => {
-        setState((prev) => {
-          if (prev.phase !== "shooting") return prev;
-          const next = prev.shootingTimeLeft - 100;
-          if (next <= 0) {
-            return { ...prev, shootingTimeLeft: 0 };
-          }
-          return { ...prev, shootingTimeLeft: next };
-        });
-      }, 100);
-
-      shootingTimerRef.current = setTimeout(() => {
-        clearAllTimers();
-        setState((prev) => ({
-          ...prev,
-          phase: "result",
-          shootingTimeLeft: 0,
-        }));
-      }, config.shootingTime);
+      if (!countdownRef.current) {
+        countdownRef.current = setInterval(() => {
+          setState((prev) => {
+            if (prev.phase !== "shooting" || prev.isTimerPaused) return prev;
+            const next = prev.shootingTimeLeft - 100;
+            return { ...prev, shootingTimeLeft: Math.max(0, next) };
+          });
+        }, 100);
+      }
+    } else {
+      if (countdownRef.current) {
+        clearInterval(countdownRef.current);
+        countdownRef.current = null;
+      }
     }
-  }, [
-    state.phase,
-    state.hasStartedShooting,
-    state.currentLevel,
-    getLevelConfig,
-    clearAllTimers,
-  ]);
+
+    return () => {
+      if (countdownRef.current) {
+        clearInterval(countdownRef.current);
+        countdownRef.current = null;
+      }
+    };
+  }, [state.phase, state.hasStartedShooting, state.isTimerPaused]);
+
+  useEffect(() => {
+    if (state.phase === "shooting" && state.shootingTimeLeft <= 0) {
+      clearAllTimers();
+      setState((prev) =>
+        prev.phase === "result" ? prev : { ...prev, phase: "result" },
+      );
+    }
+  }, [state.phase, state.shootingTimeLeft, clearAllTimers]);
 
   const startLevel = useCallback(
     (level: number) => {
       clearAllTimers();
       const config = getLevelConfig(level);
-      const targets = generateTargets(config.targetCount);
+      const distancePx = levelDistances[level] || 250;
+      const targets = generateTargets(
+        config.targetCount,
+        distancePx,
+        arenaSize,
+      );
 
       const startedAtTime =
         levelResultsRef.current.length === 0
@@ -214,6 +236,11 @@ export function useGame(
       // เปิดเป้าแรกทันที แต่ยังไม่เริ่มเวลา
       targets[0].isActive = true;
       targets[0].activatedAt = Date.now();
+
+      // Reset kinematic tracking
+      isCurrentlyWaitingRef.current = false;
+      trueReactionTimeRef.current = null;
+      mouseStartPosRef.current = null;
 
       setState((prev) => ({
         ...prev,
@@ -231,10 +258,10 @@ export function useGame(
         lastHitAt: null,
         levelComplete: false,
         shootingTimeLeft: config.shootingTime,
-        hasStartedShooting: false, // บังคับให้เป็น false จนกว่าจะยิงเป้า 0 โดน
+        hasStartedShooting: false,
       }));
     },
-    [clearAllTimers, getLevelConfig],
+    [clearAllTimers, getLevelConfig, levelDistances, arenaSize],
   );
 
   const handleShoot = useCallback(
@@ -262,9 +289,10 @@ export function useGame(
 
         const isEarlyClick = !activeTarget;
         const reactionTime =
-          activeTarget && prev.currentReactionStart
+          trueReactionTimeRef.current ??
+          (activeTarget && prev.currentReactionStart
             ? now - prev.currentReactionStart
-            : undefined;
+            : undefined);
         const switchTime =
           hit && prev.lastHitAt ? now - prev.lastHitAt : undefined;
         const isCenterHit =
@@ -292,10 +320,8 @@ export function useGame(
           reactionTime,
           switchTime,
           distanceFromCenter,
-          accuracyScore,
           isCenterHit,
           isEarlyClick,
-          scoreDelta,
           timestamp: now,
         };
 
@@ -304,44 +330,73 @@ export function useGame(
         let newReactionStart = prev.currentReactionStart;
         let newLastHitAt = prev.lastHitAt;
 
+        let newTimerPaused = prev.isTimerPaused;
+
         if (hit && hitTargetId !== null) {
-          updatedTargets = prev.targets.map((t) =>
-            t.id === hitTargetId ? { ...t, isHit: true, isActive: false } : t,
-          );
-          newActiveId = null;
-          newReactionStart = null;
-          newLastHitAt = now;
+          const isLastTarget = hitTargetId === prev.targets.length - 1;
 
-          if (signalTimerRef.current) clearTimeout(signalTimerRef.current);
-          signalTimerRef.current = setTimeout(() => {
-            setState((s) => {
-              if (s.phase !== "shooting") return s;
-              const unhit = s.targets.filter((t) => !t.isHit);
+          if (isLastTarget) {
+            updatedTargets = prev.targets.map((t) =>
+              t.id === hitTargetId ? { ...t, isHit: true, isActive: false } : t,
+            );
+            newActiveId = null;
+            newReactionStart = null;
+            newLastHitAt = now;
 
-              if (unhit.length === 0) {
-                clearAllTimers();
-                return { ...s, phase: "result", activeTargetId: null };
-              }
+            if (signalTimerRef.current) clearTimeout(signalTimerRef.current);
+          } else {
+            updatedTargets = prev.targets.map((t) =>
+              t.id === hitTargetId ? { ...t, isWaiting: true } : t,
+            );
+            newTimerPaused = true;
+            isCurrentlyWaitingRef.current = true;
+            if (countdownRef.current) {
+              clearInterval(countdownRef.current);
+              countdownRef.current = null;
+            }
 
-              // บังคับเรียงตาม ID + 1
-              const nextTargetId = hitTargetId! + 1;
-              const nextTarget = s.targets.find((t) => t.id === nextTargetId);
-              const targetToActivate =
-                nextTarget || unhit.sort((a, b) => a.id - b.id)[0];
+            const delay = 1000 + Math.random() * 2000;
 
-              return {
-                ...s,
-                targets: s.targets.map((t) => ({
-                  ...t,
-                  isActive: t.id === targetToActivate.id,
-                  activatedAt:
-                    t.id === targetToActivate.id ? Date.now() : t.activatedAt,
-                })),
-                activeTargetId: targetToActivate.id,
-                currentReactionStart: Date.now(),
-              };
-            });
-          }, 200);
+            waitTargetPxPosRef.current = {
+              x: (activeTarget!.x / 100) * arenaSize.width,
+              y: (activeTarget!.y / 100) * arenaSize.height,
+            };
+
+            if (signalTimerRef.current) clearTimeout(signalTimerRef.current);
+            signalTimerRef.current = setTimeout(() => {
+              isCurrentlyWaitingRef.current = false;
+              setState((s) => {
+                if (s.phase !== "shooting") return s;
+
+                const nextTargetId = hitTargetId! + 1;
+                const nextTarget = s.targets.find((t) => t.id === nextTargetId);
+
+                return {
+                  ...s,
+                  isTimerPaused: false,
+                  targets: s.targets.map((t) => {
+                    if (t.id === hitTargetId) {
+                      return {
+                        ...t,
+                        isWaiting: false,
+                        isHit: true,
+                        isActive: false,
+                      };
+                    }
+                    if (t.id === nextTargetId) {
+                      return { ...t, isActive: true, activatedAt: Date.now() };
+                    }
+                    return t;
+                  }),
+                  activeTargetId: nextTargetId,
+                  currentReactionStart: Date.now(),
+                  lastHitAt: Date.now(),
+                };
+              });
+
+              trueReactionTimeRef.current = null;
+            }, delay);
+          }
         }
 
         const allHit = updatedTargets.every((t) => t.isHit);
@@ -363,9 +418,8 @@ export function useGame(
           currentReactionStart: newReactionStart,
           lastHitAt: newLastHitAt,
           phase: allHit ? "result" : prev.phase,
-          score: Math.max(0, prev.score + scoreDelta),
-          // เริ่มเวลาทันทีถ้ายิงโดนเป้าแรก
           hasStartedShooting: prev.hasStartedShooting || hit,
+          isTimerPaused: newTimerPaused,
         };
       });
     },
@@ -378,9 +432,8 @@ export function useGame(
 
     const currentLevelResult = {
       level: stateRef.current.currentLevel,
-      targetCount: config.targetCount, // เก็บจำนวนเป้าเพื่อใช้กรองตัวสุดท้าย
+      targetCount: config.targetCount,
       shots: stateRef.current.shots,
-      score: stateRef.current.score,
       hitCount: stateRef.current.hitCount,
       missCount: stateRef.current.missCount,
       centerHitCount: stateRef.current.centerHitCount,
@@ -397,12 +450,11 @@ export function useGame(
           ? Math.round((hits.length / allShots.length) * 100)
           : 0;
 
-      // กรองเป้าที่ 0 และ เป้าสุดท้าย ออกจากการคำนวณ Timing
       const validTimingHits = allResults.flatMap((r) => {
         const lastId = r.targetCount - 1;
-        return (r.shots || []).filter(
-          (s: any) => s.hit && s.targetId !== 0 && s.targetId !== lastId,
-        );
+        return (r.shots || []).filter((s: any) => {
+          return s.hit && s.targetId !== 0 && s.targetId !== lastId;
+        });
       });
 
       const reactionTimes = validTimingHits
@@ -427,7 +479,28 @@ export function useGame(
             )
           : 0;
 
-      const consistencyMs = Math.round(getStandardDeviation(reactionTimes));
+      // --- แก้ไข: นำค่า SD แต่ละด่านมาเฉลี่ยรวมกัน ---
+      const validLevelSDs = allResults
+        .map((r) => {
+          const lastId = r.targetCount - 1;
+          const levelValidHits = (r.shots || []).filter(
+            (s: any) => s.hit && s.targetId !== 0 && s.targetId !== lastId,
+          );
+          const levelSwitchTimes = levelValidHits
+            .map((s: any) => s.switchTime)
+            .filter((time: any): time is number => typeof time === "number");
+          return Math.round(getStandardDeviation(levelSwitchTimes));
+        })
+        .filter((sd) => sd > 0);
+
+      const consistencyMs =
+        validLevelSDs.length > 0
+          ? Math.round(
+              validLevelSDs.reduce((sum, sd) => sum + sd, 0) /
+                validLevelSDs.length,
+            )
+          : 0;
+
       const stabilityStatus = consistencyMs > 150 ? "Unstable" : "Stable";
 
       setState((prev) => ({
@@ -482,10 +555,10 @@ export function useGame(
         const levelValidHits = level.shots.filter(
           (s: any) => s.hit && s.targetId !== 0 && s.targetId !== lastId,
         );
-        const levelReactionTimes = levelValidHits
-          .map((s: any) => s.reactionTime ?? 0)
-          .filter((t: number) => t > 0);
-        const levelSD = Math.round(getStandardDeviation(levelReactionTimes));
+        const levelSwitchTimes = levelValidHits
+          .map((s: any) => s.switchTime)
+          .filter((t: any): t is number => typeof t === "number");
+        const levelSD = Math.round(getStandardDeviation(levelSwitchTimes));
 
         return {
           level: level.level,
@@ -508,19 +581,42 @@ export function useGame(
 
       const allValidHits = rawLevelResults.flatMap((r) => {
         const lastId = r.targetCount - 1;
-        return (r.shots || []).filter(
-          (s: any) => s.hit && s.targetId !== 0 && s.targetId !== lastId,
-        );
+        return (r.shots || []).filter((s: any) => {
+          return s.hit && s.targetId !== 0 && s.targetId !== lastId;
+        });
       });
 
-      const reactionTimes = allValidHits.map((s: any) => s.reactionTime ?? 0);
+      const reactionTimes = allValidHits
+        .map((s: any) => s.reactionTime ?? 0)
+        .filter((t: number) => t > 0);
       const switchTimes = allValidHits
         .map((s: any) => s.switchTime)
         .filter((t: any): t is number => typeof t === "number");
 
-      // คำนวณค่า Global เตรียมไว้
-      const consistencyMs = Math.round(getStandardDeviation(reactionTimes));
+      // --- แก้ไข: นำค่า SD แต่ละด่านมาเฉลี่ยรวมกัน ---
+      const validLevelSDs = processedLevelResults
+        .map((level) => level.consistencyMs)
+        .filter((sd) => sd > 0);
+
+      const consistencyMs =
+        validLevelSDs.length > 0
+          ? Math.round(
+              validLevelSDs.reduce((sum, sd) => sum + sd, 0) /
+                validLevelSDs.length,
+            )
+          : 0;
+
       const stabilityStatus = consistencyMs > 150 ? "Unstable" : "Stable";
+
+      // --- แสดง Log ตรวจสอบค่า SD ---
+      console.log("========== Debug Consistency ==========");
+      console.log("SD แยกแต่ละด่าน:");
+      processedLevelResults.forEach((l) => {
+        console.log(`- Stage ${l.level}: ${l.consistencyMs} ms`);
+      });
+      console.log("ค่า SD รวม (เฉลี่ยจากทุกด่านที่ผ่านเกณฑ์):", consistencyMs);
+      console.log("สถานะภาพรวม:", stabilityStatus);
+      console.log("=======================================");
 
       return {
         gameId: "target-ghost",
@@ -534,10 +630,8 @@ export function useGame(
         averageSwitchTimeMs:
           switchTimes.length > 0 ? Math.round(getAverage(switchTimes)) : 0,
         responseTimesMs: reactionTimes,
-        // --- ย้ายมาอยู่ชั้นนอกสุดตรงนี้ ---
         globalConsistencyMs: consistencyMs,
         globalStabilityStatus: stabilityStatus,
-        // -----------------------------
         startedAt: initialStartTimeRef.current,
         endedAt,
         rawData: {
@@ -545,7 +639,6 @@ export function useGame(
           levelComplete: finalState.levelComplete,
           hitCount: hits.length,
           missCount: allShots.length - hits.length,
-          // (เอา Global ออกจาก rawData แล้วให้เหลือแค่รายละเอียดของด่าน)
           levelResults: processedLevelResults,
         },
       } as any;
@@ -553,14 +646,71 @@ export function useGame(
     [playerId, sessionId, getLevelConfig],
   );
 
+  // ==================== Kinematic Mouse Tracking ====================
+
+  const handleMouseMove = useCallback((mousePxX: number, mousePxY: number) => {
+    const s = stateRef.current;
+
+    if (s.phase !== "shooting") return;
+
+    if (isCurrentlyWaitingRef.current && waitTargetPxPosRef.current) {
+      const dx = waitTargetPxPosRef.current.x - mousePxX;
+      const dy = waitTargetPxPosRef.current.y - mousePxY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (distance > HIT_RADIUS_PX) {
+        isCurrentlyWaitingRef.current = false;
+        if (signalTimerRef.current) {
+          clearTimeout(signalTimerRef.current);
+          signalTimerRef.current = null;
+        }
+        waitTargetPxPosRef.current = null;
+
+        setState((prev) => {
+          const wt = prev.targets.find((t) => t.isWaiting);
+          if (!wt) return prev;
+
+          return {
+            ...prev,
+            isTimerPaused: true,
+            earlyClickCount: prev.earlyClickCount + 1,
+            targets: prev.targets.map((t) =>
+              t.id === wt.id ? { ...t, isWaiting: false, isActive: true } : t,
+            ),
+          };
+        });
+        return;
+      }
+    } else if (!isCurrentlyWaitingRef.current) {
+      if (s.activeTargetId === null) return;
+      if (
+        trueReactionTimeRef.current !== null ||
+        s.currentReactionStart === null
+      )
+        return;
+      if (!waitTargetPxPosRef.current) return;
+
+      const dx = waitTargetPxPosRef.current.x - mousePxX;
+      const dy = waitTargetPxPosRef.current.y - mousePxY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (distance > HIT_RADIUS_PX) {
+        trueReactionTimeRef.current = Date.now() - s.currentReactionStart;
+        waitTargetPxPosRef.current = null;
+      }
+    }
+  }, []);
+
   const goToMenu = useCallback(() => {
     clearAllTimers();
+    isCurrentlyWaitingRef.current = false;
     setState({ ...initialState });
     levelResultsRef.current = [];
   }, [clearAllTimers]);
 
   const submitAndExit = useCallback(() => {
     clearAllTimers();
+    isCurrentlyWaitingRef.current = false;
     const finalResult = buildResult(stateRef.current);
     onGameComplete(finalResult);
     setState({ ...initialState });
@@ -576,6 +726,7 @@ export function useGame(
     getLevelConfig,
     startLevel,
     handleShoot,
+    handleMouseMove,
     nextLevel,
     restartGame,
     goToMenu,

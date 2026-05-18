@@ -6,6 +6,8 @@ export interface Target {
   y: number;
   isActive: boolean;
   isHit: boolean;
+  isWaiting?: boolean;
+  isHoldingCenter?: boolean;
   activatedAt?: number;
 }
 
@@ -17,10 +19,8 @@ export interface Shot {
   reactionTime?: number;
   switchTime?: number;
   distanceFromCenter?: number;
-  accuracyScore?: number;
   isCenterHit?: boolean;
   isEarlyClick?: boolean;
-  scoreDelta?: number;
   timestamp: number;
 }
 
@@ -38,7 +38,6 @@ export interface GameState {
   targets: Target[];
   shots: Shot[];
   activeTargetId: number | null;
-  score: number;
   lives: number;
   missCount: number;
   hitCount: number;
@@ -50,7 +49,8 @@ export interface GameState {
   totalTime: number;
   shootingTimeLeft: number;
   startedAt: string;
-  hasStartedShooting: boolean; // เพิ่มสถานะเช็คว่ายิงเป้าแรกหรือยัง
+  hasStartedShooting: boolean;
+  isTimerPaused: boolean;
   finalStats?: {
     accuracy: number;
     avgReaction: number;

@@ -21,12 +21,12 @@ interface ShotEffect {
 
 interface MenuScreenProps {
   onStart: (level: number) => void;
+  onOpenSettings: () => void;
 }
 
 interface HUDProps {
   phase: GamePhase;
   level: number;
-  score: number;
   timeLeft: number;
   totalTime: number;
 }
@@ -102,9 +102,159 @@ const playBeep = (isHit: boolean) => {
   }
 };
 
+// ==================== Settings Modal Component ====================
+function SettingsModal({
+  distances,
+  onSave,
+  onClose,
+}: {
+  distances: Record<number, number>;
+  onSave: (d: Record<number, number>) => void;
+  onClose: () => void;
+}) {
+  const [localDist, setLocalDist] = useState(distances);
+  const [error, setError] = useState("");
+  const handleChange = (level: number, val: string) => {
+    const num = parseInt(val, 10);
+    setLocalDist((prev) => ({
+      ...prev,
+      [level]: isNaN(num) ? 0 : num,
+    }));
+  };
+
+  const handleSave = () => {
+    const hasInvalid = Object.values(localDist).some((dist) => dist < 100);
+
+    if (hasInvalid) {
+      setError("All stage distances must be greater than 100px");
+      return;
+    }
+
+    setError("");
+
+    onSave(localDist);
+    onClose();
+  };
+
+  const s: Record<string, CSSProperties> = {
+    overlay: {
+      position: "absolute",
+      inset: 0,
+      background: "rgba(0,0,0,0.85)",
+      backdropFilter: "blur(4px)",
+      zIndex: 999,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontFamily: '"Rajdhani", sans-serif',
+    },
+    modal: {
+      background: "#0a0f16",
+      border: "1px solid rgba(0,255,170,0.3)",
+      borderRadius: 8,
+      padding: 32,
+      width: 400,
+      maxWidth: "90%",
+      boxShadow: "0 10px 40px rgba(0,0,0,0.5)",
+    },
+    title: {
+      margin: "0 0 24px 0",
+      color: "#00ffaa",
+      textAlign: "center",
+      fontSize: 24,
+      letterSpacing: 2,
+    },
+    row: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 16,
+      background: "rgba(255,255,255,0.03)",
+      padding: "8px 16px",
+      borderRadius: 4,
+    },
+    label: { color: "#fff", fontSize: 16, fontWeight: 600 },
+    input: {
+      width: 80,
+      padding: "8px",
+      background: "rgba(0,0,0,0.5)",
+      border: "1px solid rgba(255,255,255,0.2)",
+      color: "#fff",
+      borderRadius: 4,
+      textAlign: "center",
+      fontSize: 16,
+      fontFamily: "monospace",
+    },
+    actions: {
+      display: "flex",
+      gap: 12,
+      marginTop: 32,
+    },
+    btn: {
+      flex: 1,
+      padding: "12px",
+      border: "none",
+      borderRadius: 4,
+      fontSize: 16,
+      fontWeight: 700,
+      cursor: "pointer",
+      textTransform: "uppercase",
+      letterSpacing: 1,
+    },
+  };
+
+  return (
+    <div style={s.overlay} onClick={onClose}>
+      <div style={s.modal} onClick={(e) => e.stopPropagation()}>
+        <h2 style={s.title}>⚙️ STAGE DISTANCE (PX)</h2>
+        {[1, 2, 3, 4, 5].map((lvl) => (
+          <div key={lvl} style={s.row}>
+            <span style={s.label}>Stage {lvl}</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <input
+                type="number"
+                style={s.input}
+                value={localDist[lvl]}
+                onChange={(e) => handleChange(lvl, e.target.value)}
+              />
+              <span style={{ color: "rgba(255,255,255,0.4)" }}>px</span>
+            </div>
+          </div>
+        ))}
+        {error && (
+          <div
+            style={{
+              color: "#ff4d4f",
+              marginTop: 12,
+              textAlign: "center",
+              fontWeight: 600,
+            }}
+          >
+            {error}
+          </div>
+        )}
+        <div style={s.actions}>
+          <button
+            style={{ ...s.btn, background: "#333", color: "#fff" }}
+            onClick={onClose}
+          >
+            Cancel
+          </button>
+          <button
+            style={{ ...s.btn, background: "#00ffaa", color: "#000" }}
+            onClick={handleSave}
+          >
+            Save Config
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ==================== MenuScreen Component ====================
 
-function MenuScreen({ onStart }: MenuScreenProps) {
+function MenuScreen({ onStart, onOpenSettings }: MenuScreenProps) {
   const styles: Record<string, CSSProperties> = {
     menu: {
       width: "100vw",
@@ -163,6 +313,20 @@ function MenuScreen({ onStart }: MenuScreenProps) {
       textTransform: "uppercase",
       whiteSpace: "nowrap",
     },
+    settingBtn: {
+      position: "absolute",
+      top: 24,
+      right: 24,
+      background: "rgba(0,255,170,0.1)",
+      border: "1px solid rgba(0,255,170,0.3)",
+      color: "#00ffaa",
+      padding: "8px 16px",
+      borderRadius: 4,
+      cursor: "pointer",
+      fontWeight: 700,
+      letterSpacing: 1,
+      zIndex: 10,
+    },
   };
 
   return (
@@ -178,25 +342,71 @@ function MenuScreen({ onStart }: MenuScreenProps) {
       `}</style>
       <div style={styles.bgGrid} />
       <div style={styles.bgLines} />
-      <div style={styles.menuInner}>
-        <div style={styles.logoWrap}>
-          <div style={styles.logoIcon}>◎</div>
-          <h1 style={styles.title}>REACTION TIME TEST</h1>
-          <p
+
+      <button
+        style={styles.settingBtn}
+        onClick={(e) => {
+          e.stopPropagation();
+          onOpenSettings();
+        }}
+      >
+        ⚙️ SETTINGS
+      </button>
+
+      <div style={styles.logoWrap}>
+        <div style={styles.logoIcon}>◎</div>
+        <h1 style={styles.title}>REACTION TIME TEST</h1>
+
+        <div
+          style={{
+            color: "rgba(255, 255, 255, 0.8)",
+            maxWidth: "540px",
+            textAlign: "left",
+            background: "rgba(0, 255, 170, 0.03)",
+            border: "1px solid rgba(0, 255, 170, 0.15)",
+            padding: "24px",
+            borderRadius: "8px",
+            marginTop: "20px",
+            fontSize: "15px",
+            lineHeight: "1.6",
+          }}
+        >
+          <b
             style={{
-              fontSize: 20,
-              color: "rgba(255, 255, 255, 0.6)",
-              letterSpacing: 1,
-              marginTop: 20,
-              textAlign: "center",
-              lineHeight: 1.6,
+              color: "#00ffaa",
+              display: "block",
+              marginBottom: "8px",
+              fontSize: "18px",
+              textTransform: "uppercase",
+              letterSpacing: "1px",
             }}
           >
-            Shoot targets as quickly as possible.
-            <br />
-            Press anywhere to start.
-          </p>
+            💡 วิธีการทดสอบ:
+          </b>
+          • <b>ยิงเป้าสีแดง:</b> คลิกยิงเป้าหมายแรกเพื่อเริ่มต้นด่าน
+          <br />• <b>ตรึงเมาส์ค้างไว้:</b> หลังยิงโดน
+          เป้าจะมีอักษรสีเหลือง(HOLD)แสดงแล้ว{" "}
+          <b>ห้ามขยับเมาส์ออกจากเป้าเด็ดขาด</b> จนกว่าเป้าถัดไปจะโผล่ขึ้นมา
+          (สุ่ม 1-3 วินาที)
+          <br />• <b>สะบัดไปยิงเป้าใหม่:</b> ทันทีที่สัยญาณเป้าถัดไปปรากฏ
+          ให้รีบเลื่อนเมาส์ไปยิงเป้าใหม่ให้เร็วที่สุด
+          <br />• ผ่านให้ครบทั้ง 5 ระดับเพื่อวัดผลความนิ่ง (Stability)
+          และความเร็วในการตอบสนองของคุณ
         </div>
+
+        <p
+          style={{
+            fontSize: 22,
+            color: "#00ffaa",
+            letterSpacing: 2,
+            marginTop: 30,
+            textAlign: "center",
+            fontWeight: "bold",
+            animation: "pulse 1.5s infinite alternate",
+          }}
+        >
+          [ คลิกพื้นที่ใดก็ได้เพื่อเริ่มเกม ]
+        </p>
       </div>
     </div>
   );
@@ -421,7 +631,7 @@ function GameOverScreen({
             </span>
           </div>
           <div style={s.stat}>
-            <span style={s.slabel}>STABILITY</span>
+            <span style={s.slabel}>STABILITY (FLICK)</span>
             <span
               style={{
                 ...s.sval,
@@ -452,11 +662,9 @@ function ResultScreen({
   onNext,
   onMenu,
 }: ResultScreenProps) {
-  // Accuracy ยังคงคำนวณจากทุกนัด
   const accuracy =
     shots.length > 0 ? Math.round((hitCount / shots.length) * 100) : 0;
 
-  // กรองเป้าที่ 0 และ เป้าสุดท้ายออก สำหรับคิดค่าความเสถียร SD
   const lastId = config.targetCount - 1;
   const validTimingShots = shots.filter(
     (s) => s.hit && s.targetId !== 0 && s.targetId !== lastId,
@@ -465,16 +673,22 @@ function ResultScreen({
   const reactionTimes = validTimingShots
     .map((s) => s.reactionTime || 0)
     .filter((t) => t > 0);
-  const avg =
-    reactionTimes.length > 0
-      ? reactionTimes.reduce((a, b) => a + b, 0) / reactionTimes.length
+
+  const switchTimesForSD = validTimingShots
+    .map((s) => s.switchTime)
+    .filter((t): t is number => typeof t === "number");
+  const switchAvg =
+    switchTimesForSD.length > 0
+      ? switchTimesForSD.reduce((a, b) => a + b, 0) / switchTimesForSD.length
       : 0;
-  const variance =
-    reactionTimes.length > 0
-      ? reactionTimes.reduce((sum, val) => sum + Math.pow(val - avg, 2), 0) /
-        reactionTimes.length
+  const switchVariance =
+    switchTimesForSD.length > 0
+      ? switchTimesForSD.reduce(
+          (sum, val) => sum + Math.pow(val - switchAvg, 2),
+          0,
+        ) / switchTimesForSD.length
       : 0;
-  const sd = Math.sqrt(variance);
+  const sd = Math.sqrt(switchVariance); // Stability based on flick (switchTime) SD
 
   const s: Record<string, CSSProperties> = {
     wrap: {
@@ -585,7 +799,7 @@ function ResultScreen({
             {
               icon: sd > 150 ? "⚠️" : "🎯",
               val: sd > 150 ? "UNSTABLE" : "STABLE",
-              label: `STABILITY`,
+              label: `STABILITY (FLICK SD)`,
               color: sd > 150 ? "#ff3d6b" : "#00ffaa",
             },
             {
@@ -650,19 +864,47 @@ function ResultScreen({
 // ==================== GameCanvas Component ====================
 
 function GameCanvas(props: GameCanvasProps) {
+  const arenaRef = useRef<HTMLDivElement>(null);
+  const [shotEffects, setShotEffects] = useState<ShotEffect[]>([]);
+  const effectIdRef = useRef(0);
+  const [showPath, setShowPath] = useState(true);
+  const [arenaSize, setArenaSize] = useState(() => ({
+    width: typeof window !== "undefined" ? window.innerWidth - 34 : 800,
+    height: typeof window !== "undefined" ? window.innerHeight - 82 : 600,
+  }));
+  const [showSettings, setShowSettings] = useState(false);
+
+  // สถานะเก็บระยะพิกเซลของแต่ละด่าน (Default ด่านละ 250px)
+  const [levelDistances, setLevelDistances] = useState<Record<number, number>>({
+    1: 250,
+    2: 250,
+    3: 300,
+    4: 300,
+    5: 350,
+  });
+
+  // เรียกใช้ Hook โดยส่งระยะและขนาดจอไปด้วย
+  const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(
+    null,
+  );
+
   const {
     state,
     getLevelConfig,
     startLevel,
     handleShoot,
+    handleMouseMove,
     nextLevel,
     submitAndExit,
-  } = useGame(props.playerId, props.sessionId, props.onGameComplete);
-  const arenaRef = useRef<HTMLDivElement>(null);
-  const [shotEffects, setShotEffects] = useState<ShotEffect[]>([]);
-  const effectIdRef = useRef(0);
-  const [showPath, setShowPath] = useState(true);
-  const [arenaSize, setArenaSize] = useState({ width: 0, height: 0 });
+  } = useGame(
+    props.playerId,
+    props.sessionId,
+    props.onGameComplete,
+    levelDistances, // ส่ง Setting ที่ตั้งไปให้ Game Logic
+    arenaSize, // ส่งขนาดจอไปคำนวณตำแหน่ง Pixel -> %
+  );
+
+  const config = getLevelConfig(state.currentLevel);
 
   useEffect(() => {
     const updateSize = () => {
@@ -673,7 +915,7 @@ function GameCanvas(props: GameCanvasProps) {
         });
       }
     };
-    updateSize();
+    updateSize(); // อ่านค่าครั้งแรก
     window.addEventListener("resize", updateSize);
     return () => window.removeEventListener("resize", updateSize);
   }, []);
@@ -716,10 +958,21 @@ function GameCanvas(props: GameCanvasProps) {
     [state.phase, state.targets, state.activeTargetId, handleShoot],
   );
 
-  const config = getLevelConfig(state.currentLevel);
-  const isShooting = state.phase === "shooting";
+  const onArenaMouseMove = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      const rect = arenaRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const pxX = e.clientX - rect.left;
+      const pxY = e.clientY - rect.top;
+      setMousePos({ x: pxX, y: pxY });
+      if (state.phase === "shooting") {
+        handleMouseMove(pxX, pxY);
+      }
+    },
+    [state.phase, handleMouseMove],
+  );
 
-  // แสดงเป้าเมื่อยิงเป้าแรกไปแล้ว (hasStartedShooting) หรือ เป็นเป้าที่กำลังรอให้กดยิง
+  const isShooting = state.phase === "shooting";
   const showTargets =
     isShooting && state.targets.some((t) => t.isActive || t.isHit);
 
@@ -730,7 +983,23 @@ function GameCanvas(props: GameCanvasProps) {
     };
   }, [isShooting]);
 
-  if (state.phase === "menu") return <MenuScreen onStart={startLevel} />;
+  if (state.phase === "menu") {
+    return (
+      <>
+        <MenuScreen
+          onStart={startLevel}
+          onOpenSettings={() => setShowSettings(true)}
+        />
+        {showSettings && (
+          <SettingsModal
+            distances={levelDistances}
+            onSave={(newDist) => setLevelDistances(newDist)}
+            onClose={() => setShowSettings(false)}
+          />
+        )}
+      </>
+    );
+  }
 
   if (state.phase === "gameover") {
     const finalAccuracy = state.finalStats?.accuracy || 0;
@@ -754,7 +1023,6 @@ function GameCanvas(props: GameCanvasProps) {
   if (state.phase === "result") {
     const hits = state.shots.filter((s) => s.hit);
 
-    // ส่งข้อมูลแบบกรองตัวหัวและท้ายแล้วเพื่อไปแสดงผล
     const lastId = config.targetCount - 1;
     const validTimingHits = hits.filter(
       (s) => s.targetId !== 0 && s.targetId !== lastId,
@@ -837,43 +1105,57 @@ function GameCanvas(props: GameCanvasProps) {
         <HUD
           phase={state.phase}
           level={state.currentLevel}
-          score={state.score}
           timeLeft={state.shootingTimeLeft}
           totalTime={config.shootingTime}
         />
       )}
-      <div ref={arenaRef} onClick={onArenaClick} style={arenaStyle}>
+      <div
+        ref={arenaRef}
+        onClick={onArenaClick}
+        onMouseMove={onArenaMouseMove}
+        style={arenaStyle}
+      >
         <TargetConnectorOverlay
           targets={state.targets}
           arenaWidth={arenaSize.width}
           arenaHeight={arenaSize.height}
           visible={showPath}
+          mousePos={mousePos}
         />
         {showTargets &&
           state.targets.map((target) => {
             const isActive = target.isActive;
             const isHit = target.isHit;
 
+            const isWaiting = target.isWaiting;
             const ringOuterColor = isActive
               ? "rgba(255,80,80,0.7)"
-              : isHit
-                ? "rgba(0,255,100,0.3)"
-                : "rgba(255,255,255,0.15)";
+              : isWaiting
+                ? "rgba(255,200,0,0.6)"
+                : isHit
+                  ? "rgba(0,255,100,0.3)"
+                  : "rgba(255,255,255,0.15)";
             const ringMidColor = isActive
               ? "rgba(255,80,80,0.85)"
-              : isHit
-                ? "rgba(0,255,100,0.4)"
-                : "rgba(255,255,255,0.2)";
+              : isWaiting
+                ? "rgba(255,200,0,0.75)"
+                : isHit
+                  ? "rgba(0,255,100,0.4)"
+                  : "rgba(255,255,255,0.2)";
             const ringInnerColor = isActive
               ? "#ff5050"
-              : isHit
-                ? "rgba(0,255,100,0.5)"
-                : "rgba(255,255,255,0.3)";
+              : isWaiting
+                ? "rgba(255,200,0,0.9)"
+                : isHit
+                  ? "rgba(0,255,100,0.5)"
+                  : "rgba(255,255,255,0.3)";
             const centerBg = isActive
               ? "#ff5050"
-              : isHit
-                ? "rgba(0,255,100,0.6)"
-                : "rgba(255,255,255,0.4)";
+              : isWaiting
+                ? "#ffc800"
+                : isHit
+                  ? "rgba(0,255,100,0.6)"
+                  : "rgba(255,255,255,0.4)";
 
             return (
               <div
@@ -916,13 +1198,33 @@ function GameCanvas(props: GameCanvasProps) {
                   ))}
                   <div
                     style={{
-                      width: 10,
-                      height: 10,
+                      width: 18,
+                      height: 18,
                       background: centerBg,
                       borderRadius: "50%",
                       ...(isActive ? { boxShadow: "0 0 10px #ff5050" } : {}),
+                      ...(isWaiting ? { boxShadow: "0 0 10px #ffc800" } : {}),
                     }}
                   />
+                  {isWaiting && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        bottom: -50,
+                        left: "50%",
+                        transform: "translateX(-50%)",
+                        fontSize: 25,
+                        fontWeight: 900,
+                        letterSpacing: 2,
+                        color: "#ffc800",
+                        textShadow: "0 0 8px rgba(255,200,0,0.7)",
+                        whiteSpace: "nowrap",
+                        fontFamily: "monospace",
+                      }}
+                    >
+                      HOLD
+                    </div>
+                  )}
                   {isActive && (
                     <div
                       style={{

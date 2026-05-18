@@ -6,11 +6,15 @@ export function TargetConnectorOverlay({
   arenaWidth,
   arenaHeight,
   visible,
+  mousePos,
+  deadzoneRadius = 30,
 }: {
   targets: Target[];
   arenaWidth: number;
   arenaHeight: number;
   visible: boolean;
+  mousePos?: { x: number; y: number } | null;
+  deadzoneRadius?: number;
 }) {
   const { connections, pointLabels } = useMemo(() => {
     if (!visible || arenaWidth <= 0 || targets.length === 0)
@@ -60,6 +64,44 @@ export function TargetConnectorOverlay({
 
     return { connections: cons, pointLabels: labels };
   }, [targets, arenaWidth, arenaHeight, visible]);
+
+  if (!visible && !mousePos) return null;
+  if (!visible && mousePos) {
+    // Show only the deadzone circle overlay when path is off but deadzone is on
+    return (
+      <svg
+        style={{
+          position: "absolute",
+          inset: 0,
+          width: "100%",
+          height: "100%",
+          pointerEvents: "none",
+          zIndex: 100,
+          overflow: "visible",
+        }}
+      >
+        {mousePos && (
+          <g>
+            <circle
+              cx={mousePos.x}
+              cy={mousePos.y}
+              r={deadzoneRadius}
+              fill="none"
+              stroke="rgba(255, 200, 0, 0.6)"
+              strokeWidth="1.5"
+              strokeDasharray="4 3"
+            />
+            <circle
+              cx={mousePos.x}
+              cy={mousePos.y}
+              r={3}
+              fill="rgba(255, 200, 0, 0.8)"
+            />
+          </g>
+        )}
+      </svg>
+    );
+  }
 
   if (!visible || pointLabels.length === 0) return null;
 
@@ -129,6 +171,27 @@ export function TargetConnectorOverlay({
           </text>
         </g>
       ))}
+
+      {/* วงกลม Deadzone 30px รอบเมาส์ */}
+      {mousePos && (
+        <g>
+          <circle
+            cx={mousePos.x}
+            cy={mousePos.y}
+            r={deadzoneRadius}
+            fill="none"
+            stroke="rgba(255, 200, 0, 0.6)"
+            strokeWidth="1.5"
+            strokeDasharray="4 3"
+          />
+          <circle
+            cx={mousePos.x}
+            cy={mousePos.y}
+            r={3}
+            fill="rgba(255, 200, 0, 0.8)"
+          />
+        </g>
+      )}
     </svg>
   );
 }

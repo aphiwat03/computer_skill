@@ -13,6 +13,7 @@ export const DIFFICULTY_CONFIGS: Record<string, Partial<GameConfig>> = {
   hard: { obstacleCount: 4, memorizeTime: 2500 },
 };
 
+// สร้าง config เริ่มต้นจากขนาด canvas และ difficulty เพื่อให้ component ไม่ต้องรู้สูตรตั้งค่าเอง
 export function createDefaultConfig(
   canvasWidth: number,
   canvasHeight: number,
@@ -37,6 +38,7 @@ export function getDynamicObstacles(
 ): Obstacle[] {
   return obstacles.map((obs) => {
     if (obs.moveType === "static") return obs;
+    // ใช้ sine wave เพื่อให้ obstacle เคลื่อนที่กลับไปกลับมาอย่างต่อเนื่อง
     const t = (timeMs / 1000) * obs.moveSpeed + obs.moveOffset;
     const offset = Math.sin(t) * obs.moveRange;
     return {
@@ -61,17 +63,18 @@ export function generateLevel(
   const margin = 60;
 
   for (let attempt = 0; attempt < 100; attempt++) {
+    // วางจุดเริ่มทางซ้าย และเป้าหมายทางขวา เพื่อบังคับให้ผู้เล่นต้องจำเส้นทางข้ามจอ
     const start: Point = {
       x: margin + Math.random() * (W * 0.3),
       y: margin + Math.random() * (H - margin * 2),
     };
 
-    // Target on opposite side
     const target: Point = {
       x: W - margin - Math.random() * (W * 0.3),
       y: margin + Math.random() * (H - margin * 2),
     };
 
+    // ถ้าจุดเริ่มกับเป้าหมายใกล้เกินไป ด่านจะง่ายเกิน จึงสุ่มใหม่
     if (distance(start, target) < W * 0.5) {
       continue;
     }
@@ -79,6 +82,7 @@ export function generateLevel(
     const obstacles = generateObstacles(config, start, target, round);
 
     let isBlocked = false;
+    // ตรวจเส้นตรงระหว่าง start-target ถ้ามี obstacle ขวาง จะทำให้ด่านมีความท้าทายมากขึ้น
     for (let i = 0; i <= 100; i++) {
       const t = i / 100;
       const pt: Point = {
@@ -97,7 +101,7 @@ export function generateLevel(
     }
   }
 
-  // Fallback
+  // Fallback กรณีสุ่มครบแล้วยังไม่ได้ด่านที่ต้องการ: สร้างด่านกลางจอที่มี obstacle บังคับ
   const start: Point = { x: margin, y: H / 2 };
   const target: Point = { x: W - margin, y: H / 2 };
   const obstacles = generateObstacles(config, start, target, round);
@@ -123,10 +127,11 @@ function generateObstacles(
   target: Point,
   round: number,
 ): Obstacle[] {
-  const { canvasWidth: W, canvasHeight: H, obstacleCount } = config;
+  const { canvasWidth: W, canvasHeight: H } = config;
   const obstacles: Obstacle[] = [];
 
   let currentObstacleCount = config.obstacleCount;
+  // รอบหลัง ๆ เพิ่มจำนวน obstacle เพื่อให้ความยากไต่ขึ้น แม้ difficulty เดิมจะไม่เปลี่ยน
   if (round === 3) {
     currentObstacleCount += 2;
   } else if (round === 4) {
@@ -151,6 +156,7 @@ function generateObstacles(
 
       const distStart = distance({ x: cx, y: cy }, start);
       const distTarget = distance({ x: cx, y: cy }, target);
+      // กันไม่ให้ obstacle ทับบริเวณเริ่มต้นหรือเป้าหมายจนเล่นไม่ได้
       if (distStart < safeRadius || distTarget < safeRadius) continue;
       if (
         obstacles.some((o) =>
@@ -167,6 +173,8 @@ function generateObstacles(
       if (isMoving) {
         const pathPadding = 35;
 
+        // หลีกเลี่ยง path การเคลื่อนที่ที่คร่อม start/target โดยตรง
+        // ไม่อย่างนั้นผู้เล่นอาจชนทันทีตั้งแต่เริ่มหรือจบทั้งที่ลากถูกทาง
         if (moveType === "horizontal") {
           const pathTop = y - pathPadding;
           const pathBottom = y + h + pathPadding;
@@ -199,11 +207,13 @@ function generateObstacles(
       if (moveType === "horizontal") {
         moveRange = (W - w - 40) / 2;
         baseX = 20 + moveRange;
+        // คำนวณ phase เริ่มต้นให้ตำแหน่งจริง ณ ตอนสร้างด่านตรงกับค่า x ที่สุ่มได้
         const ratio = Math.max(-1, Math.min(1, (x - baseX) / moveRange));
         moveOffset = Math.asin(ratio) - (now / 1000) * moveSpeed;
       } else if (moveType === "vertical") {
         moveRange = (H - h - 40) / 2;
         baseY = 20 + moveRange;
+        // แนวตั้งใช้หลักเดียวกันกับแนวนอน แต่ผูกกับแกน y
         const ratio = Math.max(-1, Math.min(1, (y - baseY) / moveRange));
         moveOffset = Math.asin(ratio) - (now / 1000) * moveSpeed;
       } else {
@@ -277,6 +287,7 @@ export function checkSegmentCollision(
   config: GameConfig,
   steps = 20,
 ): { collision: CollisionResult; point?: Point } {
+  // เมาส์ไม่ได้ส่งทุก pixel จึง sample จุดย่อยระหว่างสอง event เพื่อไม่ให้เส้นทะลุ obstacle
   for (let i = 0; i <= steps; i++) {
     const t = i / steps;
     const pt: Point = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
@@ -310,7 +321,7 @@ export function evaluateAttempt(
   const lastPt = trail[trail.length - 1];
   const distFromTarget = distance(lastPt, target);
 
-  // Scan path for collisions using exact timing to match moving obstacles
+  // ตรวจย้อนหลังทั้งเส้นทาง โดยใช้ timestamp ของแต่ละจุดเพื่อให้ตำแหน่ง obstacle ตรงกับเวลาจริงที่ผู้เล่นลาก
   for (let i = 1; i < trail.length; i++) {
     const ptTime = trail[i].timeMs || Date.now();
     const currentObs = getDynamicObstacles(obstacles, ptTime);
@@ -353,6 +364,7 @@ export function calculateScore(
 
   const diag = Math.sqrt(config.canvasWidth ** 2 + config.canvasHeight ** 2);
 
+  // คะแนนถ่วงน้ำหนัก: เข้าใกล้เป้าหมายสำคัญสุด รองลงมาคือเส้นทางสั้นและเวลาเร็ว
   const accuracy = Math.max(
     0,
     1 - result.distanceFromTarget / config.targetRadius,

@@ -17,9 +17,7 @@ import {
   generateLevel,
   createDefaultConfig,
   evaluateAttempt,
-  calculateScore,
   calculateBreakdown,
-  getRating,
   checkCollision,
   getDynamicObstacles,
 } from "./logic";
@@ -37,6 +35,7 @@ interface SpatialMemoryGameProps {
 
 // ─── Reducer ──────────────────────────────────────────────────────────────────
 
+// Action เหล่านี้คือ event หลักของเกม ตั้งแต่เริ่มจำภาพจนถึงสรุปผลท้ายเกม
 type Action =
   | {
       type: "START_MEMORIZE";
@@ -70,6 +69,7 @@ function initState(totalRounds: number): GameState {
   };
 }
 
+// reducer ทำหน้าที่เป็น state machine กลาง เพื่อให้การเปลี่ยน phase ไม่กระจายอยู่หลายจุดใน component
 function reducer(state: GameState, action: Action): GameState {
   switch (action.type) {
     case "START_MEMORIZE":
@@ -114,7 +114,7 @@ function reducer(state: GameState, action: Action): GameState {
     case "RESET":
       return initState(state.totalRounds);
     case "SHOW_SUMMARY":
-      return { ...state, phase: "summary" as any };
+      return { ...state, phase: "summary" };
     default:
       return state;
   }
@@ -149,7 +149,7 @@ function drawGame(
   ctx.clearRect(0, 0, W, H);
 
   if (isBlind && !collisionFlash) {
-    // Blind phase — white screen
+    // ช่วง navigate เป็น blind phase: ซ่อนแผนที่จริง เหลือแค่เส้นที่ผู้เล่นลากกับจุดเริ่มแบบจาง ๆ
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, W, H);
 
@@ -184,10 +184,9 @@ function drawGame(
     ctx.fillStyle = "rgba(255,30,30,0.18)";
     ctx.fillRect(0, 0, W, H);
   } else {
-    // BG
+    // พื้นหลังและ grid แสดงเฉพาะช่วงที่ยังมองเห็นแผนที่
     ctx.fillStyle = COLORS.bg;
     ctx.fillRect(0, 0, W, H);
-    // Grid
     ctx.strokeStyle = COLORS.grid;
     ctx.lineWidth = 1;
     const step = 40;
@@ -205,7 +204,7 @@ function drawGame(
     }
   }
 
-  // Obstacles
+  // วาด obstacle จากตำแหน่งที่ถูกอัปเดตแล้วใน render loop
   for (const obs of state.obstacles) {
     // Glow
     const grd = ctx.createRadialGradient(
@@ -344,6 +343,7 @@ export default function SpatialMemoryGame({
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stateRef = useRef(state);
   const gameStartTimeRef = useRef<number>(Date.now());
+  // renderLoop และ event callback ต้องอ่าน state ล่าสุด แต่ไม่ควร restart animation ทุกครั้งที่ state เปลี่ยน
   stateRef.current = state;
 
   const config = configRef.current;
@@ -356,6 +356,7 @@ export default function SpatialMemoryGame({
       const rect = canvas.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) return;
 
+      // แยก logical canvas size ออกจาก physical pixels เพื่อให้ภาพคมบนจอ DPI สูง แต่ยังใช้ coordinate เกมเดิม
       const pixelRatio = Math.min(
         window.devicePixelRatio || 1,
         MAX_CANVAS_PIXEL_RATIO,
@@ -395,7 +396,7 @@ export default function SpatialMemoryGame({
       const s = stateRef.current;
       const isBlind = s.phase === "navigate";
 
-      // หาเวลาเพื่อใช้อัปเดตตำแหน่งสิ่งกีดขวางแบบไหลลื่น
+      // ขณะเล่นใช้เวลาปัจจุบัน แต่หลังจบรอบ freeze obstacle ไว้ที่เวลาที่ผู้เล่นปล่อยเมาส์
       let timeForObstacles = Date.now();
       if (
         (s.phase === "result" || s.phase === "view_path") &&
@@ -412,6 +413,7 @@ export default function SpatialMemoryGame({
       const drawState = { ...s, obstacles: currentObstacles };
 
       ctx.save();
+      // scale drawing จาก logical size 700x450 ไปยัง pixel จริงของ canvas
       ctx.setTransform(
         canvas.width / config.canvasWidth,
         0,
@@ -431,6 +433,7 @@ export default function SpatialMemoryGame({
   }, [config, canvasRenderVersion]);
 
   const startRound = useCallback(() => {
+    // สร้างด่านใหม่จาก round ถัดไป แล้วเปิดช่วงจำตำแหน่งก่อนซ่อนแผนที่
     const level = generateLevel(config, state.round + 1);
     dispatch({ type: "START_MEMORIZE", payload: level });
 
@@ -443,13 +446,14 @@ export default function SpatialMemoryGame({
       );
       if (elapsed >= config.memorizeTime) {
         clearInterval(timer);
+        // เกมนี้ข้าม countdown ไป blind navigation ทันทีหลังหมดเวลาจำ
         dispatch({ type: "START_NAVIGATE" });
       }
     }, interval);
     timerRef.current = timer as unknown as ReturnType<typeof setTimeout>;
   }, [config, state.round]);
 
-  // Mouse handlers
+  // แปลงตำแหน่งเมาส์บน DOM canvas ให้กลับมาเป็น coordinate ภายในเกม
   const getCanvasPoint = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>): Point => {
       const canvas = canvasRef.current!;
@@ -476,7 +480,7 @@ export default function SpatialMemoryGame({
       const dy = pt.y - s.start.y;
       const distFromStart = Math.sqrt(dx * dx + dy * dy);
 
-      // ถ้าคลิกนอกจุด Start
+      // บังคับให้เริ่มลากจากวง Start เพื่อให้การวัดเส้นทางยุติธรรมทุกครั้ง
       if (distFromStart > config.startRadius + 15) {
         setStartWarning(true); // โชว์ข้อความเตือน
 
@@ -500,7 +504,7 @@ export default function SpatialMemoryGame({
       if (s.phase !== "navigate" || !s.isMouseDown) return;
       const pt = getCanvasPoint(e);
 
-      // Real-time collision check (ดึงตำแหน่งสิ่งกีดขวางแบบเป๊ะๆ ของเสี้ยววินาทีนี้)
+      // เช็กชนแบบ real-time เพื่อให้มี flash เตือนทันที ส่วนผลจริงจะถูกประเมินซ้ำตอน mouse up
       const currentObs = getDynamicObstacles(
         s.obstacles,
         pt.timeMs || Date.now(),
@@ -524,6 +528,7 @@ export default function SpatialMemoryGame({
     dispatch({ type: "MOUSE_UP" });
 
     if (s.startTime === null) return;
+    // ประเมิน trail ทั้งเส้นหลังผู้เล่นปล่อยเมาส์ แล้วเปลี่ยนไปหน้าแสดงเส้นทาง
     const result = evaluateAttempt(
       s.trail,
       s.target,
@@ -795,7 +800,7 @@ export default function SpatialMemoryGame({
         )}
 
         {/* 2. หน้า Summary (สรุปค่าเฉลี่ยทั้งหมด) */}
-        {(state.phase as any) === "summary" && (
+        {state.phase === "summary" && (
           <div
             style={{ ...styles.overlay, background: "#030508", zIndex: 1000 }}
           >
@@ -869,6 +874,7 @@ export default function SpatialMemoryGame({
                       (r) => r.success,
                     ).length;
 
+                    // รวมผลรายรอบให้อยู่ในรูปแบบกลางที่ parent หรือระบบบันทึกผลนำไปใช้ต่อได้
                     const avgAccuracy = Math.round(
                       allResults.reduce(
                         (sum, r) =>
@@ -931,30 +937,6 @@ export default function SpatialMemoryGame({
               : "Spatial Memory Benchmark v1.0"}
         </span>
       </div>
-    </div>
-  );
-}
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-function Meter({
-  label,
-  value,
-  color,
-}: {
-  label: string;
-  value: number;
-  color: string;
-}) {
-  return (
-    <div style={styles.meter}>
-      <span style={styles.meterLabel}>{label}</span>
-      <div style={styles.meterTrack}>
-        <div
-          style={{ ...styles.meterFill, width: `${value}%`, background: color }}
-        />
-      </div>
-      <span style={{ ...styles.meterVal, color }}>{value}</span>
     </div>
   );
 }

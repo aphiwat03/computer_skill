@@ -7,7 +7,13 @@ import {
 } from "react";
 import { useGame } from "./logic";
 import { LEVELS } from "./types";
-import type { GameResult, GamePhase, LevelConfig, Shot } from "./types";
+import type {
+  GameResult,
+  GamePhase,
+  LevelConfig,
+  Shot,
+  PerTargetDistances,
+} from "./types";
 import { TargetConnectorOverlay } from "./TargetConnectorOverlay";
 
 // ==================== Types & Interfaces ====================
@@ -103,44 +109,94 @@ const playBeep = (isHit: boolean) => {
 };
 
 // ==================== Settings Modal Component ====================
+
+/**
+ * แปลง PerTargetDistances (Record<level, number[]>) ไปเป็น string[][]
+ * เพื่อใช้ใน input fields
+ */
+function distancesToStrings(
+  d: PerTargetDistances,
+  levels: typeof LEVELS,
+): Record<number, string[]> {
+  const result: Record<number, string[]> = {};
+  levels.forEach((lvl) => {
+    const arr = d[lvl.level] ?? [];
+    // ความยาว = targetCount - 1 segments
+    result[lvl.level] = Array.from({ length: lvl.targetCount - 1 }, (_, i) =>
+      String(arr[i] ?? 250),
+    );
+  });
+  return result;
+}
+
 function SettingsModal({
   distances,
   onSave,
   onClose,
 }: {
-  distances: Record<number, number>;
-  onSave: (d: Record<number, number>) => void;
+  distances: PerTargetDistances;
+  onSave: (d: PerTargetDistances) => void;
   onClose: () => void;
 }) {
-  const [localDist, setLocalDist] = useState(distances);
+  const [localStr, setLocalStr] = useState<Record<number, string[]>>(() =>
+    distancesToStrings(distances, LEVELS),
+  );
   const [error, setError] = useState("");
-  const handleChange = (level: number, val: string) => {
-    const num = parseInt(val, 10);
-    setLocalDist((prev) => ({
-      ...prev,
-      [level]: isNaN(num) ? 0 : num,
-    }));
+  const [activeLevel, setActiveLevel] = useState(1);
+
+  const handleChange = (level: number, idx: number, val: string) => {
+    setLocalStr((prev) => {
+      const arr = [...(prev[level] ?? [])];
+      arr[idx] = val;
+      return { ...prev, [level]: arr };
+    });
   };
 
   const handleSave = () => {
-    const hasInvalid = Object.values(localDist).some((dist) => dist < 100);
-
-    if (hasInvalid) {
-      setError("All stage distances must be greater than 100px");
-      return;
+    // Validate
+    for (const lvl of LEVELS) {
+      const arr = localStr[lvl.level] ?? [];
+      for (let i = 0; i < lvl.targetCount - 1; i++) {
+        const num = parseInt(arr[i] ?? "0", 10);
+        if (isNaN(num) || num < 50) {
+          setError(`Stage ${lvl.level} — ระยะทางทุก segment ต้องมากกว่า 50 px`);
+          setActiveLevel(lvl.level);
+          return;
+        }
+      }
     }
-
     setError("");
-
-    onSave(localDist);
+    // แปลงกลับเป็น number[][]
+    const result: PerTargetDistances = {};
+    LEVELS.forEach((lvl) => {
+      result[lvl.level] = (localStr[lvl.level] ?? []).map(
+        (s) => parseInt(s, 10) || 250,
+      );
+    });
+    onSave(result);
     onClose();
   };
+
+  const tabStyle = (active: boolean): CSSProperties => ({
+    flex: 1,
+    padding: "8px 4px",
+    border: `1px solid ${active ? "#00ffaa" : "rgba(255,255,255,0.15)"}`,
+    background: active ? "rgba(0,255,170,0.1)" : "transparent",
+    color: active ? "#00ffaa" : "rgba(255,255,255,0.45)",
+    borderRadius: 4,
+    cursor: "pointer",
+    fontSize: 13,
+    fontWeight: 700,
+    letterSpacing: 1,
+    textAlign: "center",
+    fontFamily: '"Rajdhani", sans-serif',
+  });
 
   const s: Record<string, CSSProperties> = {
     overlay: {
       position: "absolute",
       inset: 0,
-      background: "rgba(0,0,0,0.85)",
+      background: "rgba(0,0,0,0.88)",
       backdropFilter: "blur(4px)",
       zIndex: 999,
       display: "flex",
@@ -152,28 +208,49 @@ function SettingsModal({
       background: "#0a0f16",
       border: "1px solid rgba(0,255,170,0.3)",
       borderRadius: 8,
-      padding: 32,
-      width: 400,
-      maxWidth: "90%",
-      boxShadow: "0 10px 40px rgba(0,0,0,0.5)",
+      padding: "28px 32px",
+      width: 520,
+      minWidth: 520,
+      maxWidth: "94vw",
+      height: 650,
+      maxHeight: "90vh",
+      overflowY: "auto",
+      boxSizing: "border-box",
+      boxShadow: "0 10px 40px rgba(0,0,0,0.6)",
+      display: "flex",
+      flexDirection: "column",
     },
+    scrollArea: {
+      flex: 1,
+      overflowY: "auto",
+      paddingRight: 8,
+      marginBottom: 20,
+    },
+
     title: {
-      margin: "0 0 24px 0",
+      margin: "0 0 20px 0",
       color: "#00ffaa",
       textAlign: "center",
-      fontSize: 24,
+      fontSize: 22,
       letterSpacing: 2,
     },
-    row: {
+    tabRow: {
+      display: "flex",
+      gap: 6,
+      marginBottom: 20,
+      flexWrap: "wrap" as const,
+    },
+    segRow: {
       display: "flex",
       justifyContent: "space-between",
       alignItems: "center",
-      marginBottom: 16,
+      marginBottom: 12,
       background: "rgba(255,255,255,0.03)",
-      padding: "8px 16px",
+      padding: "10px 16px",
       borderRadius: 4,
     },
-    label: { color: "#fff", fontSize: 16, fontWeight: 600 },
+    segLabel: { color: "#fff", fontSize: 15, fontWeight: 600, minWidth: 100 },
+    segSub: { color: "rgba(255,255,255,0.35)", fontSize: 12, marginTop: 2 },
     input: {
       width: 80,
       padding: "8px",
@@ -185,11 +262,7 @@ function SettingsModal({
       fontSize: 16,
       fontFamily: "monospace",
     },
-    actions: {
-      display: "flex",
-      gap: 12,
-      marginTop: 32,
-    },
+    actions: { display: "flex", gap: 12, marginTop: 24 },
     btn: {
       flex: 1,
       padding: "12px",
@@ -202,37 +275,97 @@ function SettingsModal({
       letterSpacing: 1,
     },
   };
+  const currentLvl = LEVELS.find((l) => l.level === activeLevel)!;
+  const segCount = currentLvl.targetCount - 1;
+  const strs = localStr[activeLevel] ?? [];
 
   return (
     <div style={s.overlay} onClick={onClose}>
-      <div style={s.modal} onClick={(e) => e.stopPropagation()}>
-        <h2 style={s.title}>⚙️ STAGE DISTANCE (PX)</h2>
-        {[1, 2, 3, 4, 5].map((lvl) => (
-          <div key={lvl} style={s.row}>
-            <span style={s.label}>Stage {lvl}</span>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <input
-                type="number"
-                style={s.input}
-                value={localDist[lvl]}
-                onChange={(e) => handleChange(lvl, e.target.value)}
-              />
-              <span style={{ color: "rgba(255,255,255,0.4)" }}>px</span>
+      <style>{`
+      .neon-scroll {
+        scrollbar-width: thin;
+        scrollbar-color: #00ffaa #0a0f16;
+      }
+      .neon-scroll::-webkit-scrollbar {
+        width: 6px;
+      }
+      .neon-scroll::-webkit-scrollbar-track {
+        background: rgba(0,0,0,0.3);
+        border-radius: 4px;
+      }
+      .neon-scroll::-webkit-scrollbar-thumb {
+        background: #00ffaa;
+        border-radius: 4px;
+      }
+      .neon-scroll::-webkit-scrollbar-thumb:hover {
+        background: #00e699;
+      }
+    `}</style>
+      <div
+        className="neon-scroll"
+        style={s.modal}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 style={s.title}>⚙️ DISTANCE SETTINGS (PX)</h2>
+
+        {/* Stage tabs */}
+        <div style={s.tabRow}>
+          {LEVELS.map((lvl) => (
+            <button
+              key={lvl.level}
+              style={tabStyle(activeLevel === lvl.level)}
+              onClick={() => setActiveLevel(lvl.level)}
+            >
+              S{lvl.level}
+              <br />
+              <span style={{ fontSize: 10, fontWeight: 400 }}>{lvl.label}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Per-segment inputs (ปรับการครอบ div ให้ใช้ s.scrollArea) */}
+        <div style={s.scrollArea}>
+          {Array.from({ length: segCount }, (_, i) => (
+            <div key={i} style={s.segRow}>
+              <div>
+                <div style={s.segLabel}>
+                  เป้า {i + 1} → {i + 2}
+                </div>
+                <div style={s.segSub}>
+                  Segment {i + 1} / {segCount}
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <input
+                  type="number"
+                  min={50}
+                  step={10}
+                  style={s.input}
+                  value={strs[i] ?? "250"}
+                  onChange={(e) => handleChange(activeLevel, i, e.target.value)}
+                />
+                <span style={{ color: "rgba(255,255,255,0.4)", fontSize: 13 }}>
+                  px
+                </span>
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
+
         {error && (
           <div
             style={{
               color: "#ff4d4f",
-              marginTop: 12,
+              marginTop: 10,
               textAlign: "center",
               fontWeight: 600,
+              fontSize: 14,
             }}
           >
             {error}
           </div>
         )}
+
         <div style={s.actions}>
           <button
             style={{ ...s.btn, background: "#333", color: "#fff" }}
@@ -874,14 +1007,19 @@ function GameCanvas(props: GameCanvasProps) {
   }));
   const [showSettings, setShowSettings] = useState(false);
 
-  // สถานะเก็บระยะพิกเซลของแต่ละด่าน (Default ด่านละ 250px)
-  const [levelDistances, setLevelDistances] = useState<Record<number, number>>({
-    1: 250,
-    2: 250,
-    3: 300,
-    4: 300,
-    5: 350,
-  });
+  // สถานะเก็บระยะพิกเซลของแต่ละ segment ในแต่ละด่าน
+  // key = level, value = number[] ของระยะทางแต่ละ segment (เป้า i → i+1)
+  const [levelDistances, setLevelDistances] = useState<PerTargetDistances>(
+    () => {
+      // Default: ทุก segment ในแต่ละด่านใช้ระยะเดิม
+      const defaults: PerTargetDistances = {};
+      LEVELS.forEach((lvl) => {
+        const defaultDist = [250, 250, 300, 300, 350][lvl.level - 1] ?? 250;
+        defaults[lvl.level] = Array(lvl.targetCount - 1).fill(defaultDist);
+      });
+      return defaults;
+    },
+  );
 
   // เรียกใช้ Hook โดยส่งระยะและขนาดจอไปด้วย
   const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(

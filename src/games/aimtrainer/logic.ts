@@ -1,5 +1,12 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import type { GameState, Target, Shot, LevelConfig, GameResult } from "./types";
+import type {
+  GameState,
+  Target,
+  Shot,
+  LevelConfig,
+  GameResult,
+  PerTargetDistances,
+} from "./types";
 import { LEVELS, TARGET_HIT_RADIUS_PX } from "./types";
 
 // ==================== Game Constants ====================
@@ -42,7 +49,7 @@ function getStandardDeviation(values: number[]) {
 
 function generateTargets(
   count: number,
-  distancePx: number,
+  segmentDistances: number[], // ระยะทาง px ของแต่ละ segment (i → i+1), ความยาว = count-1
   arenaSize: ArenaSize,
 ): Target[] {
   const targets: Target[] = [];
@@ -50,6 +57,12 @@ function generateTargets(
 
   const w = arenaSize.width > 0 ? arenaSize.width : 800;
   const h = arenaSize.height > 0 ? arenaSize.height : 600;
+
+  // helper: ดึงระยะทางของ segment i (fallback ไปค่าสุดท้ายถ้า array สั้นกว่า)
+  const getDist = (i: number) => {
+    const arr = segmentDistances.length > 0 ? segmentDistances : [250];
+    return arr[Math.min(i, arr.length - 1)];
+  };
 
   for (let i = 0; i < count; i++) {
     if (i === 0) {
@@ -61,9 +74,10 @@ function generateTargets(
         isHit: false,
       });
     } else {
+      const distancePx = getDist(i - 1); // segment i-1 → i
       let placed = false;
       let attempts = 0;
-      const maxAttempts = 100;
+      const maxAttempts = 200;
       const prevTarget = targets[i - 1];
 
       while (!placed && attempts < maxAttempts) {
@@ -150,7 +164,7 @@ export function useGame(
   playerId: string,
   sessionId: string,
   onGameComplete: (result: GameResult) => void,
-  levelDistances: Record<number, number>,
+  levelDistances: PerTargetDistances,
   arenaSize: { width: number; height: number },
 ) {
   const [state, setState] = useState<GameState>(initialState);
@@ -221,10 +235,10 @@ export function useGame(
     (level: number) => {
       clearAllTimers();
       const config = getLevelConfig(level);
-      const distancePx = levelDistances[level] || 250;
+      const segmentDistances: number[] = levelDistances[level] ?? [250];
       const targets = generateTargets(
         config.targetCount,
-        distancePx,
+        segmentDistances,
         arenaSize,
       );
 
@@ -288,13 +302,20 @@ export function useGame(
         }
 
         const isEarlyClick = !activeTarget;
+
         const reactionTime =
           trueReactionTimeRef.current ??
           (activeTarget && prev.currentReactionStart
             ? now - prev.currentReactionStart
             : undefined);
-        const switchTime =
+
+        let switchTime =
           hit && prev.lastHitAt ? now - prev.lastHitAt : undefined;
+
+        if (switchTime !== undefined && reactionTime !== undefined) {
+          switchTime = Math.max(0, switchTime - reactionTime);
+        }
+
         const isCenterHit =
           hit && distanceFromCenter !== undefined
             ? distanceFromCenter <= CENTER_HIT_RADIUS_PX
@@ -479,7 +500,6 @@ export function useGame(
             )
           : 0;
 
-      // --- แก้ไข: นำค่า SD แต่ละด่านมาเฉลี่ยรวมกัน ---
       const validLevelSDs = allResults
         .map((r) => {
           const lastId = r.targetCount - 1;
@@ -593,7 +613,6 @@ export function useGame(
         .map((s: any) => s.switchTime)
         .filter((t: any): t is number => typeof t === "number");
 
-      // --- แก้ไข: นำค่า SD แต่ละด่านมาเฉลี่ยรวมกัน ---
       const validLevelSDs = processedLevelResults
         .map((level) => level.consistencyMs)
         .filter((sd) => sd > 0);
@@ -607,17 +626,6 @@ export function useGame(
           : 0;
 
       const stabilityStatus = consistencyMs > 150 ? "Unstable" : "Stable";
-
-      // --- แสดง Log ตรวจสอบค่า SD ---
-      console.log("========== Debug Consistency ==========");
-      console.log("SD แยกแต่ละด่าน:");
-      processedLevelResults.forEach((l) => {
-        console.log(`- Stage ${l.level}: ${l.consistencyMs} ms`);
-      });
-      console.log("ค่า SD รวม (เฉลี่ยจากทุกด่านที่ผ่านเกณฑ์):", consistencyMs);
-      console.log("สถานะภาพรวม:", stabilityStatus);
-      console.log("=======================================");
-
       return {
         gameId: "target-ghost",
         gameName: "Target Ghost",

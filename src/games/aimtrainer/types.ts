@@ -76,6 +76,13 @@ export interface GameResult {
   rawData: any;
 }
 
+/**
+ * ระยะทาง (px) ระหว่างเป้าที่ i → i+1 ในแต่ละด่าน
+ * key = level (1-5), value = array ของระยะทางแต่ละ segment
+ * ความยาว array ควร = targetCount - 1
+ */
+export type PerTargetDistances = Record<number, number[]>;
+
 export const TARGET_SIZE_PX = 64;
 export const TARGET_HIT_RADIUS_PX = TARGET_SIZE_PX / 2;
 
